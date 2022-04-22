@@ -12,6 +12,7 @@ from .utils import (
 from .information import mutual_information
 
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 
@@ -156,16 +157,43 @@ class PAGE:
 
         return overrep_pvals, underrep_pvals
 
+    def _gather_results(
+            self,
+            exp: ExpressionProfile,
+            ont: GeneOntology,
+            info: np.ndarray,
+            over_pvals: np.ndarray,
+            under_pvals: np.ndarray) -> pd.DataFrame:
+        """Gathers the results from the experiment into a single dataframe
+        """
+        results = []
+        for info_idx, path_idx in enumerate(info):
+            for bin_idx in range(over_pvals.shape[0]):
+                results.append({
+                    "bin_idx": bin_idx,
+                    "bin_desc": exp.bins[bin_idx],
+                    "pathway_idx": path_idx,
+                    "pathway_desc": ont.pathways[path_idx],
+                    "over_pval": over_pvals[bin_idx, info_idx],
+                    "under_pval": under_pvals[bin_idx, info_idx]})
+
+        results = pd.DataFrame(results)
+        results["sign"] = results.apply(lambda x: 1 if x.over_pval < x.under_pval else -1, axis=1)
+        results["pvalue"] = results.apply(lambda x: np.min([x.over_pval, x.under_pval]), axis=1)
+        results["adj_pval"] = np.clip(results.pvalue * results.shape[0], 0, 1)
+        results["nlp"] = -np.log10(results.adj_pval + np.min(results.adj_pval[results.adj_pval > 0]))
+        results["snlp"] = results.sign * results.nlp
+        return results
 
     def run(
             self,
             exp: ExpressionProfile,
-            ont: GeneOntology):
+            ont: GeneOntology) -> pd.DataFrame:
         """
         """
         informative, e_bool, o_bool = self._identify_informative(exp, ont)
         overrep_pvals, underrep_pvals = self._significance_testing(informative, e_bool, o_bool)
-        return overrep_pvals, underrep_pvals
+        return self._gather_results(exp, ont, informative, overrep_pvals, underrep_pvals)
 
 
 
