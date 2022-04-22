@@ -7,7 +7,8 @@ from .io import (
 from .utils import (
         contingency_table, 
         shuffle_bool_array,
-        empirical_pvalue)
+        empirical_pvalue,
+        hypergeometric_test)
 from .information import mutual_information
 
 import numpy as np
@@ -134,6 +135,28 @@ class PAGE:
         informative = self._filter_informative(exp_bool, ont_bool, information)
         return informative, exp_bool, ont_bool
 
+    def _significance_testing(
+            self,
+            informative: np.ndarray,
+            exp_bool: np.ndarray,
+            ont_bool: np.ndarray):
+        """
+        Iterates through informative pathways to calculate hypergeometric pvalues
+        """
+        overrep_pvals = np.zeros((exp_bool.shape[0], informative.size))
+        underrep_pvals = np.zeros_like(overrep_pvals)
+
+        pbar = tqdm(enumerate(informative), desc="hypergeometric tests")
+        for idx, info_idx in pbar:
+            pvals = hypergeometric_test(
+                    exp_bool, 
+                    ont_bool[info_idx])
+            overrep_pvals[:, idx] = pvals[0]
+            underrep_pvals[:, idx] = pvals[1]
+
+        return overrep_pvals, underrep_pvals
+
+
     def run(
             self,
             exp: ExpressionProfile,
@@ -141,7 +164,8 @@ class PAGE:
         """
         """
         informative, e_bool, o_bool = self._identify_informative(exp, ont)
-        return informative, e_bool, o_bool
+        overrep_pvals, underrep_pvals = self._significance_testing(informative, e_bool, o_bool)
+        return overrep_pvals, underrep_pvals
 
 
 
