@@ -19,3 +19,9 @@ jobs:
     - name: Install Package
       run: |
         pip install -e .
+    
+
+    - name: Pytest
+      run: |
+        pip install pytest
+        pytest -v
