@@ -70,3 +70,17 @@ def hypergeometric_test(
     cdf = hg.cdf(k)
     
     return np.stack([sf, cdf])
+
+
+def benjamini_hochberg(
+        p: np.ndarray) -> np.ndarray:
+    """
+    Benjamini-Hochberg p-value correction for multiple hypothesis testing.
+    https://stackoverflow.com/a/33532498
+    """
+    p = np.asfarray(p)
+    by_descend = p.argsort()[::-1]
+    by_orig = by_descend.argsort()
+    steps = float(len(p)) / np.arange(len(p), 0, -1)
+    q = np.minimum(1, np.minimum.accumulate(steps * p[by_descend]))
+    return q[by_orig]
