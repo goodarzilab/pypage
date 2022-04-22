@@ -8,7 +8,8 @@ from .utils import (
         contingency_table, 
         shuffle_bool_array,
         empirical_pvalue,
-        hypergeometric_test)
+        hypergeometric_test,
+        benjamini_hochberg)
 from .information import mutual_information
 
 import numpy as np
@@ -180,7 +181,7 @@ class PAGE:
         results = pd.DataFrame(results)
         results["sign"] = results.apply(lambda x: 1 if x.over_pval < x.under_pval else -1, axis=1)
         results["pvalue"] = results.apply(lambda x: np.min([x.over_pval, x.under_pval]), axis=1)
-        results["adj_pval"] = np.clip(results.pvalue * results.shape[0], 0, 1)
+        results["adj_pval"] = benjamini_hochberg(results.pvalue)
         results["nlp"] = -np.log10(results.adj_pval + np.min(results.adj_pval[results.adj_pval > 0]))
         results["snlp"] = results.sign * results.nlp
         return results
