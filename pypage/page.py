@@ -119,7 +119,7 @@ class PAGE:
                         desc=f"Permutation Tests: {self.k} uninformative pathways reached")
                     break
 
-        return informative
+        return np.array(informative)
 
     def _identify_informative(
             self,
