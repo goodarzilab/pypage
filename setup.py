@@ -6,5 +6,5 @@ setup(
    description='Python implementation of the PAGE algorithm',
    author='Noam Teyssier',
    packages=['pypage'],
-   install_requires=['numpy']
+   install_requires=['numpy', 'pandas', 'numba', 'tqdm', 'scipy']
 )
