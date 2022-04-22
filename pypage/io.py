@@ -1,6 +1,7 @@
 """Data input and output handling
 """
 
+
 import numpy as np
 import pandas as pd
 
@@ -52,8 +53,7 @@ class GeneOntology:
     """
     def __init__(
             self,
-            index_filename: str,
-            names_filename: str):
+            index_filename: str):
 
         self.index_filename = index_filename
 
