@@ -3,7 +3,7 @@ name: Testing
 on: [push]
 
 jobs:
-  linux-conda-install:
+  linux-pip-install:
     runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
