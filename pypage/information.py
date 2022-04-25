@@ -1,42 +1,70 @@
 """Implementation of Information Utils
 """
 
+import math
 import numpy as np
 import numba as nb
+from typing import Optional
 
 
 @nb.jit(
-    nopython=True, 
-    fastmath=True)
+    cache=True,
+    nopython=True,
+    nogil=True)
+def empirical_entropy(
+        array: np.ndarray,
+        total_number: int,
+        base: Optional[int] = None) -> float:
+    """Calculates the empirical entropy of a vector
+
+    inputs:
+        array: np.ndarray
+            a 1D vector of counts
+        total_number: int
+            the sum to normalize to
+        base: int
+            the base of the logarithm (default = natural)
+
+    outputs:
+        entropy: float
+            the calculated entropy of the array
+    """
+    probability = np.divide(array, total_number)
+    entropy = 0.
+    base = math.e if not base else base
+
+    for i in probability:
+        if i == 0:
+            continue
+        entropy -= i * math.log(i) / math.log(base)
+
+    return entropy
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
 def mutual_information(
-        contingency: np.ndarray,
-        eps: float = 1e-12) -> float:
-    """Calculates mutual information from contingency table
+        contingency: np.ndarray) -> float:
+    """Calculates mutual information from contingency table. 
+    
+    Calculated using the form:
+        I(X; Y) = H(X) + H(Y) - H(X, Y)
 
     inputs:
         contingency: np.ndarray
             2xNe array where Ne is the number of expression bins.
-        eps: float
-            a small float to add to zeros to avoid divide by zeros
-
     outputs:
         information: float
-            the sum of the calculated mutual information matrix
+            The calculated mutual information
     """
-
-    N = contingency.sum()
-    p_ij = ((eps + contingency) / N)
-    p_i = p_ij.sum(axis=1)
-    p_j = p_ij.sum(axis=0)
+    total = contingency.sum()
+    cx = contingency.sum(axis=1)
+    cy = contingency.sum(axis=0)
     
-    information = 0.
-    for i in range(contingency.shape[0]):
-        for j in range(contingency.shape[1]):
-            if contingency[i][j] == 0:
-                pass
-            pxy = p_ij[i][j]
-            px = p_i[i]
-            py = p_j[j]
-            information += pxy * np.log( pxy / (px * py) ) / np.log(2.0)
-            
-    return information
+    Hx = empirical_entropy(cx, total, base=2)
+    Hy = empirical_entropy(cy, total, base=2)
+    Hxy = empirical_entropy(contingency.flatten(), total, base=2)
+
+    return (Hx + Hy - Hxy)
