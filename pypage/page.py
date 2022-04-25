@@ -5,8 +5,9 @@ from .io import (
         GeneOntology, 
         ExpressionProfile)
 from .utils import (
-        contingency_table, 
-        shuffle_bool_array,
+        hist2D,
+        hist3D,
+        shuffle_bin_array,
         empirical_pvalue,
         hypergeometric_test,
         benjamini_hochberg)
@@ -45,21 +46,21 @@ class PAGE:
             ix: np.ndarray) -> (np.ndarray, np.ndarray):
         """Subsets the bool arrays to the gene intersection
         """
-        exp_bool = exp.get_gene_subset(ix)
+        exp_bins = exp.get_gene_subset(ix)
         ont_bool = ont.get_gene_subset(ix)
-        return exp_bool, ont_bool
+        return exp_bins, ont_bool
 
     def _build_contingency(
             self,
-            exp_bool: np.ndarray,
+            exp_bins: np.ndarray,
             ont_bool: np.ndarray) -> np.ndarray:
         """creates a contingency table tensor for each pathway
         """
         num_pathways = ont_bool.shape[0]
-        num_bins = exp_bool.shape[0]
-        cont_tensor = np.zeros((num_pathways, 2, num_bins))
+        num_bins = exp_bins.max() + 1
+        cont_tensor = np.zeros((num_pathways, num_bins, 2))
         for idx in tqdm(range(num_pathways), desc="building contingency tables"):
-            cont_tensor[idx] = contingency_table(exp_bool, ont_bool[idx])
+            cont_tensor[idx] = hist2D(exp_bins, ont_bool[idx], num_bins, 2)
         return cont_tensor
 
     def _calculate_mutual_information(
@@ -75,22 +76,23 @@ class PAGE:
 
     def _permutation_test_mi(
             self,
-            exp_bool: np.ndarray,
+            exp_bins: np.ndarray,
             ont_bool: np.ndarray,
             information: float) -> float:
         """performs a permutation test and calculates an empirical p-value
         """
         mi_shuf = np.zeros(self.n_shuffle)
+        n_bins = exp_bins.max() + 1
         for idx in np.arange(self.n_shuffle):
-            b_shuf = shuffle_bool_array(exp_bool)
-            c_shuf = contingency_table(b_shuf, ont_bool)
+            b_shuf = shuffle_bin_array(exp_bins)
+            c_shuf = hist2D(b_shuf, ont_bool, n_bins, 2)
             mi_shuf[idx] = mutual_information(c_shuf)
         emp_pval = empirical_pvalue(mi_shuf, information)
         return emp_pval
 
     def _filter_informative(
             self,
-            exp_bool: np.ndarray,
+            exp_bins: np.ndarray,
             ont_bool: np.ndarray,
             information: np.ndarray):
         """iterates through most informative pathways to perform permutation testing
@@ -104,7 +106,7 @@ class PAGE:
         for q_idx in pbar:
 
             pval = self._permutation_test_mi(
-                exp_bool,
+                exp_bins,
                 ont_bool[q_idx],
                 information[q_idx])
 
@@ -131,27 +133,28 @@ class PAGE:
         """Identifies the informative pathways
         """
         shared_genes = self._intersect_genes(exp, ont)
-        exp_bool, ont_bool = self._subset_matrices(exp, ont, shared_genes)
-        cont_tensor = self._build_contingency(exp_bool, ont_bool)
+        exp_bins, ont_bool = self._subset_matrices(exp, ont, shared_genes)
+        cont_tensor = self._build_contingency(exp_bins, ont_bool)
         information = self._calculate_mutual_information(cont_tensor)
-        informative = self._filter_informative(exp_bool, ont_bool, information)
-        return informative, exp_bool, ont_bool
+        informative = self._filter_informative(exp_bins, ont_bool, information)
+        return informative, exp_bins, ont_bool
 
     def _significance_testing(
             self,
             informative: np.ndarray,
-            exp_bool: np.ndarray,
+            exp_bins: np.ndarray,
             ont_bool: np.ndarray):
         """
         Iterates through informative pathways to calculate hypergeometric pvalues
         """
-        overrep_pvals = np.zeros((exp_bool.shape[0], informative.size))
+        n_bins = exp_bins.max() + 1
+        overrep_pvals = np.zeros((n_bins, informative.size))
         underrep_pvals = np.zeros_like(overrep_pvals)
 
         pbar = tqdm(enumerate(informative), desc="hypergeometric tests")
         for idx, info_idx in pbar:
             pvals = hypergeometric_test(
-                    exp_bool, 
+                    exp_bins, 
                     ont_bool[info_idx])
             overrep_pvals[:, idx] = pvals[0]
             underrep_pvals[:, idx] = pvals[1]
@@ -192,8 +195,8 @@ class PAGE:
             ont: GeneOntology) -> pd.DataFrame:
         """
         """
-        informative, e_bool, o_bool = self._identify_informative(exp, ont)
-        overrep_pvals, underrep_pvals = self._significance_testing(informative, e_bool, o_bool)
+        informative, exp_bins, ont_bool = self._identify_informative(exp, ont)
+        overrep_pvals, underrep_pvals = self._significance_testing(informative, exp_bins, ont_bool)
         return self._gather_results(exp, ont, informative, overrep_pvals, underrep_pvals)
 
 
