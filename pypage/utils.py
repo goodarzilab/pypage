@@ -159,7 +159,7 @@ def empirical_pvalue(
     if value > m:
         return 0.
     else:
-        return np.mean(array > value)
+        return np.mean(array >= value)
 
 
 def hypergeometric_test(
