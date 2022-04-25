@@ -10,6 +10,35 @@ from scipy.stats import hypergeom
     nogil=True, 
     cache=True, 
     fastmath=True)
+def hist1D(
+        arr_a: np.ndarray, 
+        bin_a: int) -> np.ndarray:
+    """calculates the number of events in all bins 
+
+    inputs:
+        arr_a: np.ndarray
+            a 1D array where each value represents a the cluster
+            identity of a specific gene
+        bin_a: np.ndarray
+            the number of clusters in array 1. Should be equivalent
+            to the maximum value in `arr_a` + 1
+
+    outputs:
+        ct: np.ndarray
+            a 1 dimensional array where each index represents the
+            number of events in each bin
+    """
+    ct = np.zeros((bin_a, 1), dtype=np.int32)
+    for x in np.arange(arr_a.size):
+        ct[arr_a[x]] += 1
+    return ct
+
+
+@nb.jit(
+    nopython=True, 
+    nogil=True, 
+    cache=True, 
+    fastmath=True)
 def hist2D(
         arr_a: np.ndarray, 
         arr_b: np.ndarray, 
