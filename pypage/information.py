@@ -46,7 +46,8 @@ def empirical_entropy(
     nogil=True,
     nopython=True)
 def mutual_information(
-        contingency: np.ndarray) -> float:
+        contingency: np.ndarray,
+        base: int = 2) -> float:
     """Calculates mutual information from contingency table. 
     
     Calculated using the form:
@@ -63,8 +64,8 @@ def mutual_information(
     cx = contingency.sum(axis=1)
     cy = contingency.sum(axis=0)
     
-    Hx = empirical_entropy(cx, total, base=2)
-    Hy = empirical_entropy(cy, total, base=2)
-    Hxy = empirical_entropy(contingency.flatten(), total, base=2)
+    Hx = empirical_entropy(cx, total, base=base)
+    Hy = empirical_entropy(cy, total, base=base)
+    Hxy = empirical_entropy(contingency.flatten(), total, base=base)
 
     return (Hx + Hy - Hxy)
