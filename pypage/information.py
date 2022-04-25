@@ -6,66 +6,96 @@ import numpy as np
 import numba as nb
 from typing import Optional
 
-
-@nb.jit(
-    cache=True,
-    nopython=True,
-    nogil=True)
-def empirical_entropy(
-        array: np.ndarray,
-        total_number: int,
-        base: Optional[int] = None) -> float:
-    """Calculates the empirical entropy of a vector
-
-    inputs:
-        array: np.ndarray
-            a 1D vector of counts
-        total_number: int
-            the sum to normalize to
-        base: int
-            the base of the logarithm (default = natural)
-
-    outputs:
-        entropy: float
-            the calculated entropy of the array
-    """
-    probability = np.divide(array, total_number)
-    entropy = 0.
-    base = math.e if not base else base
-
-    for i in probability:
-        if i == 0:
-            continue
-        entropy -= i * math.log(i) / math.log(base)
-
-    return entropy
-
+from .utils import (
+        hist1D,
+        hist2D,
+        hist3D)
 
 @nb.jit(
     cache=True,
     nogil=True,
     nopython=True)
 def mutual_information(
-        contingency: np.ndarray,
+        X: np.ndarray,
+        Y: np.ndarray,
+        x_bins: np.ndarray,
+        y_bins: np.ndarray,
         base: int = 2) -> float:
-    """Calculates mutual information from contingency table. 
+    """Calculates mutual information for two arrays. 
     
     Calculated using the form:
-        I(X; Y) = H(X) + H(Y) - H(X, Y)
+        I(X;Y) = \sigma_y \sigma_x P_(X,Y)(x,y) log{\frac{P_(X,Y)(x,y)}{P_X(x)P_Y(y)}}
 
     inputs:
-        contingency: np.ndarray
-            2xNe array where Ne is the number of expression bins.
+        X: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Y: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        x_bins: np.ndarray
+            the number of bins in `X`. equivalent to `max(X) + 1`
+        y_bins: np.ndarray,
+            the number of bins in `Y`. equivalent to `max(Y) + 1`
+
     outputs:
         information: float
             The calculated mutual information
     """
-    total = contingency.sum()
-    cx = contingency.sum(axis=1)
-    cy = contingency.sum(axis=0)
-    
-    Hx = empirical_entropy(cx, total, base=base)
-    Hy = empirical_entropy(cy, total, base=base)
-    Hxy = empirical_entropy(contingency.flatten(), total, base=base)
+    c_xy = hist2D(X, Y, x_bins, y_bins)
+    c_x = c_xy.sum(axis=1)
+    c_y = c_xy.sum(axis=0)
 
-    return (Hx + Hy - Hxy)
+    p_xy = c_xy / c_xy.sum()
+    p_x = c_x / c_x.sum()
+    p_y = c_y / c_y.sum()
+
+    info = 0.
+    for x in range(x_bins):
+        for y in range(y_bins):
+            if p_xy[x][y] == 0:
+                continue
+            info += p_xy[x][y] * np.log(p_xy[x][y] / (p_x[x] * p_y[y])) / np.log(base)
+    
+    return info
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def conditional_mutual_information(
+        X: np.ndarray,
+        Y: np.ndarray,
+        Z: np.ndarray,
+        x_bins: np.ndarray,
+        y_bins: np.ndarray,
+        z_bins: np.ndarray,
+        base: int = 2) -> float:
+    """Calculates conditional mutual information for three arrays.
+    
+    Calculated using the form:
+        I(X;Y|Z) = \sigma_z \sigma_y \sigma_x P_(X,Y,Z)(x,y,z) log { \frac{P_Z(z)P_(X,Y,Z)(x,y,z)} {P_(X,Z)(x,z)P_(Y,Z)(y,z)}}
+    """
+
+    c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
+    c_xz = hist2D(X, Z, x_bins, z_bins)
+    c_yz = hist2D(Y, Z, y_bins, z_bins)
+    c_z = hist1D(Z, z_bins).ravel()
+
+    p_xyz = c_xyz / c_xyz.sum()
+    p_xz = c_xz / c_xz.sum()
+    p_yz = c_yz / c_yz.sum()
+    p_z = c_z / c_z.sum()
+
+
+    info = 0.
+    for x in range(x_bins):
+        for y in range(y_bins):
+            for z in range(z_bins):
+                if p_xyz[x][y][z] == 0:
+                    continue
+                numer = p_z[z] * p_xyz[x][y][z]
+                denom = p_xz[x][z] * p_yz[y][z]
+                info += p_xyz[x][y][z] * np.log(numer / denom) / np.log(base)
+    return info
