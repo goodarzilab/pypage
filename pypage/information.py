@@ -9,7 +9,8 @@ from typing import Optional
 from .utils import (
         hist1D,
         hist2D,
-        hist3D)
+        hist3D,
+        shuffle_bin_array)
 
 @nb.jit(
     cache=True,
@@ -18,8 +19,8 @@ from .utils import (
 def mutual_information(
         X: np.ndarray,
         Y: np.ndarray,
-        x_bins: np.ndarray,
-        y_bins: np.ndarray,
+        x_bins: int,
+        y_bins: int,
         base: int = 2) -> float:
     """Calculates mutual information for two arrays. 
     
@@ -33,9 +34,9 @@ def mutual_information(
         Y: np.ndarray
             a 1D array where each value represents the bin index
             for a gene
-        x_bins: np.ndarray
+        x_bins: int 
             the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: np.ndarray,
+        y_bins: int,
             the number of bins in `Y`. equivalent to `max(Y) + 1`
 
     outputs:
@@ -68,9 +69,9 @@ def conditional_mutual_information(
         X: np.ndarray,
         Y: np.ndarray,
         Z: np.ndarray,
-        x_bins: np.ndarray,
-        y_bins: np.ndarray,
-        z_bins: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
         base: int = 2) -> float:
     """Calculates conditional mutual information for three arrays.
     
@@ -99,3 +100,26 @@ def conditional_mutual_information(
                 denom = p_xz[x][z] * p_yz[y][z]
                 info += p_xyz[x][y][z] * np.log(numer / denom) / np.log(base)
     return info
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    fastmath=True,
+    parallel=True)
+def calculate_mi_permutations(
+        X: np.ndarray, 
+        Y: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2,
+        n: int = 10000) -> np.ndarray:
+    """calculates the MI for `n` permutations of X
+    """
+    permutations = np.zeros(n)
+    for idx in nb.prange(n):
+        tmp_X = shuffle_bin_array(X)
+        permutations[idx] = mutual_information(
+                tmp_X, Y, x_bins, y_bins, base=base)
+    return permutations 
