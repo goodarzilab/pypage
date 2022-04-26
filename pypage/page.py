@@ -5,12 +5,16 @@ from .io import (
         GeneOntology, 
         ExpressionProfile)
 from .utils import (
-        contingency_table, 
-        shuffle_bool_array,
+        hist2D,
+        hist3D,
+        shuffle_bin_array,
         empirical_pvalue,
         hypergeometric_test,
         benjamini_hochberg)
-from .information import mutual_information
+from .information import (
+        mutual_information,
+        calculate_mi_permutations,
+        measure_redundancy)
 
 import numpy as np
 import pandas as pd
@@ -22,12 +26,18 @@ class PAGE:
             self,
             n_shuffle: int = 1e4,
             alpha: float = 5e-3,
-            k: int = 20):
+            k: int = 20,
+            r: float = 5.,
+            base: int = 2,
+            filter_redundant: bool = True):
         """
         """
         self.n_shuffle = int(n_shuffle)
         self.alpha = float(alpha)
         self.k = int(k)
+        self.r = float(r)
+        self.base = int(base)
+        self.filter_redundant = filter_redundant
 
     def _intersect_genes(
             self, 
@@ -45,113 +55,46 @@ class PAGE:
             ix: np.ndarray) -> (np.ndarray, np.ndarray):
         """Subsets the bool arrays to the gene intersection
         """
-        exp_bool = exp.get_gene_subset(ix)
+        exp_bins = exp.get_gene_subset(ix)
         ont_bool = ont.get_gene_subset(ix)
-        return exp_bool, ont_bool
-
-    def _build_contingency(
-            self,
-            exp_bool: np.ndarray,
-            ont_bool: np.ndarray) -> np.ndarray:
-        """creates a contingency table tensor for each pathway
-        """
-        num_pathways = ont_bool.shape[0]
-        num_bins = exp_bool.shape[0]
-        cont_tensor = np.zeros((num_pathways, 2, num_bins))
-        for idx in tqdm(range(num_pathways), desc="building contingency tables"):
-            cont_tensor[idx] = contingency_table(exp_bool, ont_bool[idx])
-        return cont_tensor
+        return exp_bins, ont_bool
 
     def _calculate_mutual_information(
             self,
-            cont_tensor: np.ndarray) -> np.ndarray:
+            exp_bins: np.ndarray,
+            ont_bool: np.ndarray,
+            x_bins: int,
+            y_bins: int) -> np.ndarray:
         """Calculates the mutual information for each pathway
         """
-        num_pathways = cont_tensor.shape[0]
+        num_pathways = ont_bool.shape[0]
         information = np.zeros(num_pathways)
         for idx in tqdm(range(num_pathways), desc="calculating mutual information"):
-            information[idx] = mutual_information(cont_tensor[idx])
+            information[idx] = mutual_information(
+                    exp_bins, 
+                    ont_bool[idx], 
+                    x_bins, 
+                    y_bins, 
+                    base=self.base)
         return information
-
-    def _permutation_test_mi(
-            self,
-            exp_bool: np.ndarray,
-            ont_bool: np.ndarray,
-            information: float) -> float:
-        """performs a permutation test and calculates an empirical p-value
-        """
-        mi_shuf = np.zeros(self.n_shuffle)
-        for idx in np.arange(self.n_shuffle):
-            b_shuf = shuffle_bool_array(exp_bool)
-            c_shuf = contingency_table(b_shuf, ont_bool)
-            mi_shuf[idx] = mutual_information(c_shuf)
-        emp_pval = empirical_pvalue(mi_shuf, information)
-        return emp_pval
-
-    def _filter_informative(
-            self,
-            exp_bool: np.ndarray,
-            ont_bool: np.ndarray,
-            information: np.ndarray):
-        """iterates through most informative pathways to perform permutation testing
-        """
-        # sort I by most informative
-        qvals = np.argsort(information)[::-1]
-        
-        informative = []
-        uninformative = 0
-        pbar = tqdm(qvals, desc="Permutation Tests")
-        for q_idx in pbar:
-
-            pval = self._permutation_test_mi(
-                exp_bool,
-                ont_bool[q_idx],
-                information[q_idx])
-
-            # gene set is sufficiently informative
-            if pval <= self.alpha:
-                informative.append(q_idx)
-                q_idx += 1
-                uninformative = 0
-
-            # gene set in uninformative
-            else:
-                uninformative += 1
-                if uninformative == self.k:
-                    pbar.set_description(
-                        desc=f"Permutation Tests: {self.k} uninformative pathways reached")
-                    break
-
-        return np.array(informative)
-
-    def _identify_informative(
-            self,
-            exp: ExpressionProfile,
-            ont: GeneOntology):
-        """Identifies the informative pathways
-        """
-        shared_genes = self._intersect_genes(exp, ont)
-        exp_bool, ont_bool = self._subset_matrices(exp, ont, shared_genes)
-        cont_tensor = self._build_contingency(exp_bool, ont_bool)
-        information = self._calculate_mutual_information(cont_tensor)
-        informative = self._filter_informative(exp_bool, ont_bool, information)
-        return informative, exp_bool, ont_bool
 
     def _significance_testing(
             self,
-            informative: np.ndarray,
-            exp_bool: np.ndarray,
-            ont_bool: np.ndarray):
+            indices: np.ndarray,
+            exp_bins: np.ndarray,
+            ont_bool: np.ndarray,
+            x_bins: int,
+            y_bins: int):
         """
         Iterates through informative pathways to calculate hypergeometric pvalues
         """
-        overrep_pvals = np.zeros((exp_bool.shape[0], informative.size))
+        overrep_pvals = np.zeros((x_bins, indices.size))
         underrep_pvals = np.zeros_like(overrep_pvals)
 
-        pbar = tqdm(enumerate(informative), desc="hypergeometric tests")
+        pbar = tqdm(enumerate(indices), desc="hypergeometric tests")
         for idx, info_idx in pbar:
             pvals = hypergeometric_test(
-                    exp_bool, 
+                    exp_bins, 
                     ont_bool[info_idx])
             overrep_pvals[:, idx] = pvals[0]
             underrep_pvals[:, idx] = pvals[1]
@@ -171,10 +114,8 @@ class PAGE:
         for info_idx, path_idx in enumerate(info):
             for bin_idx in range(over_pvals.shape[0]):
                 results.append({
-                    "bin_idx": bin_idx,
-                    "bin_desc": exp.bins[bin_idx],
-                    "pathway_idx": path_idx,
-                    "pathway_desc": ont.pathways[path_idx],
+                    "bin": exp.bins[bin_idx],
+                    "pathway": ont.pathways[path_idx],
                     "over_pval": over_pvals[bin_idx, info_idx],
                     "under_pval": under_pvals[bin_idx, info_idx]})
 
@@ -186,15 +127,146 @@ class PAGE:
         results["snlp"] = results.sign * results.nlp
         return results
 
+    def _calculate_informative(
+            self,
+            information: np.ndarray,
+            exp_bins: np.ndarray,
+            ont_bool: np.ndarray,
+            x_bins: np.ndarray,
+            y_bins: np.ndarray) -> (np.ndarray, np.ndarray):
+        """Calculates the informative categories
+        """
+        n_break = 0
+        informative = np.zeros_like(information)
+        pvalues = np.zeros_like(information)
+
+        # iterate through most informative pathways
+        pbar = tqdm(np.argsort(information)[::-1], desc="permutation testing")
+        for idx in pbar:
+            
+            # calculate mutual information of random permutations
+            permutations = calculate_mi_permutations(
+                    exp_bins,
+                    ont_bool[idx],
+                    x_bins,
+                    y_bins,
+                    n=self.n_shuffle)
+            
+            # calculate empirical pvalue against randomization
+            pval = empirical_pvalue(
+                    permutations, 
+                    information[idx])
+
+            if pval > self.alpha:
+                n_break += 1
+                if n_break == self.k:
+                    break
+            else:
+                informative[idx] = 1
+                n_break = 0
+
+        return (informative, pvalues)
+
+    def _consolidate_pathways(
+            self,
+            informative: np.ndarray,
+            pvalues: np.ndarray,
+            exp_bins: np.ndarray,
+            ont_bool: np.ndarray,
+            x_bins: int,
+            y_bins: int) -> np.ndarray:
+        """Consolidate redundant pathways
+        """
+        existing = []
+        inf_idx = np.flatnonzero(informative)
+
+        # iterate through pvalues in ascending order
+        pbar = tqdm(np.argsort(pvalues), desc="consolidating redundant pathways")
+        for idx in pbar:
+
+            # skip indices that are not informative
+            if idx not in inf_idx:
+                continue
+
+            # if there are no existing pathways yet start the chain
+            if len(existing) == 0:
+                existing.append(idx)
+                continue
+            
+            # initialize reduncancy information array
+            all_ri = np.zeros(len(existing))
+
+            # calculate redundancy
+            for i, e in enumerate(existing):
+                all_ri[i] = measure_redundancy(
+                        exp_bins, 
+                        ont_bool[idx], 
+                        ont_bool[e], 
+                        x_bins, 
+                        y_bins, 
+                        y_bins)
+
+
+            # accept if informative above all existing accepted pathways
+            if np.all(all_ri >= self.r):
+                existing.append(idx)
+            else:
+                pass
+        
+        return np.array(existing)
+
     def run(
             self,
             exp: ExpressionProfile,
             ont: GeneOntology) -> pd.DataFrame:
         """
         """
-        informative, e_bool, o_bool = self._identify_informative(exp, ont)
-        overrep_pvals, underrep_pvals = self._significance_testing(informative, e_bool, o_bool)
-        return self._gather_results(exp, ont, informative, overrep_pvals, underrep_pvals)
+        shared_genes = self._intersect_genes(exp, ont)
+        exp_bins, ont_bool = self._subset_matrices(exp, ont, shared_genes)
 
+        x_bins = exp_bins.max() + 1
+        y_bins = 2
 
+        # calculate mutual information
+        information = self._calculate_mutual_information(
+                exp_bins,
+                ont_bool,
+                x_bins,
+                y_bins)
+        
+        # select informative pathways
+        informative, pvalues = self._calculate_informative(
+                information, 
+                exp_bins, 
+                ont_bool, 
+                x_bins,
+                y_bins)
 
+        # filter redundant pathways
+        if self.filter_redundant:
+            pathway_indices = self._consolidate_pathways(
+                    informative,
+                    pvalues,
+                    exp_bins,
+                    ont_bool,
+                    x_bins,
+                    y_bins)
+        else:
+            pathway_indices = informative.copy()
+
+        # hypergeometric testing over selected pathways
+        overrep_pvals, underrep_pvals = self._significance_testing(
+                pathway_indices,
+                exp_bins,
+                ont_bool,
+                x_bins,
+                y_bins)
+
+        results = self._gather_results(
+                exp,
+                ont,
+                pathway_indices,
+                overrep_pvals,
+                underrep_pvals)
+
+        return results

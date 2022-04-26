@@ -24,9 +24,14 @@ class ExpressionProfile:
         self.n_genes = self.genes.size
         self.n_bins = self.bins.size
 
+
+        # builds bool array
         self.bool_array = np.zeros((self.n_bins, self.n_genes), dtype=int)
         for g, b in expression_profile.values:
             self.bool_array[bins[b]][genes[g]] += 1
+
+        # builds bin array
+        self.bin_array = np.argmax(self.bool_array, axis=0)
         
         self.bin_sizes = self.bool_array.sum(axis=1)
 
@@ -45,7 +50,7 @@ class ExpressionProfile:
         """Indexed the bool array for the required gene subset. Expects the subset to be sorted
         """
         mask = np.isin(self.genes, gene_subset)
-        return self.bool_array[:, mask]
+        return self.bin_array[mask]
 
 
 class GeneOntology:
