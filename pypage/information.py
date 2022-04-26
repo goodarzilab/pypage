@@ -123,3 +123,40 @@ def calculate_mi_permutations(
         permutations[idx] = mutual_information(
                 tmp_X, Y, x_bins, y_bins, base=base)
     return permutations 
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    fastmath=True)
+def measure_redundancy(
+        X: np.ndarray, 
+        Y: np.ndarray,
+        Z: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
+        base: int = 2) -> np.ndarray:
+    """Measures the reduncany of a pathway via a ratio of
+    conditional mutual information and mutual information
+
+    r_i = I(Y; X|Z) / I(Y;Z)
+    """
+    cmi = conditional_mutual_information(
+            Y, 
+            X, 
+            Z, 
+            y_bins, 
+            x_bins, 
+            z_bins,
+            base=base)
+
+    mi = mutual_information(
+            Y,
+            Z,
+            y_bins,
+            z_bins,
+            base=base)
+
+    return cmi / mi
+
