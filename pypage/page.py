@@ -5,9 +5,6 @@ from .io import (
         GeneOntology, 
         ExpressionProfile)
 from .utils import (
-        hist2D,
-        hist3D,
-        shuffle_bin_array,
         empirical_pvalue,
         hypergeometric_test,
         benjamini_hochberg)
@@ -252,7 +249,7 @@ class PAGE:
                     x_bins,
                     y_bins)
         else:
-            pathway_indices = informative.copy()
+            pathway_indices = np.flatnonzero(informative)
 
         # hypergeometric testing over selected pathways
         overrep_pvals, underrep_pvals = self._significance_testing(

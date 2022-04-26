@@ -6,10 +6,11 @@ import numpy as np
 import numba as nb
 from typing import Optional
 
-from .utils import (
+from .hist import (
         hist1D,
         hist2D,
-        hist3D,
+        hist3D)
+from .utils import (
         shuffle_bin_array)
 
 @nb.jit(
