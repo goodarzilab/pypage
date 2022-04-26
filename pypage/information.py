@@ -1,42 +1,162 @@
 """Implementation of Information Utils
 """
 
+import math
 import numpy as np
 import numba as nb
+from typing import Optional
 
+from .utils import (
+        hist1D,
+        hist2D,
+        hist3D,
+        shuffle_bin_array)
 
 @nb.jit(
-    nopython=True, 
-    fastmath=True)
+    cache=True,
+    nogil=True,
+    nopython=True)
 def mutual_information(
-        contingency: np.ndarray,
-        eps: float = 1e-12) -> float:
-    """Calculates mutual information from contingency table
+        X: np.ndarray,
+        Y: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2) -> float:
+    """Calculates mutual information for two arrays. 
+    
+    Calculated using the form:
+        I(X;Y) = \sigma_y \sigma_x P_(X,Y)(x,y) log{\frac{P_(X,Y)(x,y)}{P_X(x)P_Y(y)}}
 
     inputs:
-        contingency: np.ndarray
-            2xNe array where Ne is the number of expression bins.
-        eps: float
-            a small float to add to zeros to avoid divide by zeros
+        X: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Y: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        x_bins: int 
+            the number of bins in `X`. equivalent to `max(X) + 1`
+        y_bins: int,
+            the number of bins in `Y`. equivalent to `max(Y) + 1`
 
     outputs:
         information: float
-            the sum of the calculated mutual information matrix
+            The calculated mutual information
+    """
+    c_xy = hist2D(X, Y, x_bins, y_bins)
+    c_x = c_xy.sum(axis=1)
+    c_y = c_xy.sum(axis=0)
+
+    p_xy = c_xy / c_xy.sum()
+    p_x = c_x / c_x.sum()
+    p_y = c_y / c_y.sum()
+
+    info = 0.
+    for x in range(x_bins):
+        for y in range(y_bins):
+            if p_xy[x][y] == 0:
+                continue
+            info += p_xy[x][y] * np.log(p_xy[x][y] / (p_x[x] * p_y[y])) / np.log(base)
+    
+    return info
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def conditional_mutual_information(
+        X: np.ndarray,
+        Y: np.ndarray,
+        Z: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
+        base: int = 2) -> float:
+    """Calculates conditional mutual information for three arrays.
+    
+    Calculated using the form:
+        I(X;Y|Z) = \sigma_z \sigma_y \sigma_x P_(X,Y,Z)(x,y,z) log { \frac{P_Z(z)P_(X,Y,Z)(x,y,z)} {P_(X,Z)(x,z)P_(Y,Z)(y,z)}}
     """
 
-    N = contingency.sum()
-    p_ij = ((eps + contingency) / N)
-    p_i = p_ij.sum(axis=1)
-    p_j = p_ij.sum(axis=0)
-    
-    information = 0.
-    for i in range(contingency.shape[0]):
-        for j in range(contingency.shape[1]):
-            if contingency[i][j] == 0:
-                pass
-            pxy = p_ij[i][j]
-            px = p_i[i]
-            py = p_j[j]
-            information += pxy * np.log( pxy / (px * py) ) / np.log(2.0)
-            
-    return information
+    c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
+    c_xz = hist2D(X, Z, x_bins, z_bins)
+    c_yz = hist2D(Y, Z, y_bins, z_bins)
+    c_z = hist1D(Z, z_bins).ravel()
+
+    p_xyz = c_xyz / c_xyz.sum()
+    p_xz = c_xz / c_xz.sum()
+    p_yz = c_yz / c_yz.sum()
+    p_z = c_z / c_z.sum()
+
+
+    info = 0.
+    for x in range(x_bins):
+        for y in range(y_bins):
+            for z in range(z_bins):
+                if p_xyz[x][y][z] == 0:
+                    continue
+                numer = p_z[z] * p_xyz[x][y][z]
+                denom = p_xz[x][z] * p_yz[y][z]
+                info += p_xyz[x][y][z] * np.log(numer / denom) / np.log(base)
+    return info
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    fastmath=True,
+    parallel=True)
+def calculate_mi_permutations(
+        X: np.ndarray, 
+        Y: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2,
+        n: int = 10000) -> np.ndarray:
+    """calculates the MI for `n` permutations of X
+    """
+    permutations = np.zeros(n)
+    for idx in nb.prange(n):
+        tmp_X = shuffle_bin_array(X)
+        permutations[idx] = mutual_information(
+                tmp_X, Y, x_bins, y_bins, base=base)
+    return permutations 
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    fastmath=True)
+def measure_redundancy(
+        X: np.ndarray, 
+        Y: np.ndarray,
+        Z: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
+        base: int = 2) -> np.ndarray:
+    """Measures the reduncany of a pathway via a ratio of
+    conditional mutual information and mutual information
+
+    r_i = I(Y; X|Z) / I(Y;Z)
+    """
+    cmi = conditional_mutual_information(
+            Y, 
+            X, 
+            Z, 
+            y_bins, 
+            x_bins, 
+            z_bins,
+            base=base)
+
+    mi = mutual_information(
+            Y,
+            Z,
+            y_bins,
+            z_bins,
+            base=base)
+
+    return cmi / mi
+
