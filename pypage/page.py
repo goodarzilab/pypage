@@ -14,8 +14,10 @@ from .information import (
         measure_redundancy)
 
 import numpy as np
+import numba as nb
 import pandas as pd
 from tqdm import tqdm
+from typing import Optional
 
 
 class PAGE:
@@ -26,7 +28,8 @@ class PAGE:
             k: int = 20,
             r: float = 5.,
             base: int = 2,
-            filter_redundant: bool = True):
+            filter_redundant: bool = True,
+            n_jobs: Optional[int] = None):
         """
         """
         self.n_shuffle = int(n_shuffle)
@@ -35,6 +38,18 @@ class PAGE:
         self.r = float(r)
         self.base = int(base)
         self.filter_redundant = filter_redundant
+        self.n_jobs = n_jobs
+        self._set_jobs()
+
+    def _set_jobs(self):
+        """Sets the number of available jobs for numba parallel
+        """
+        if self.n_jobs:
+            self.n_jobs = int(self.n_jobs)
+            nb.set_num_threads(self.n_jobs)
+        else:
+            # default to using all available threads
+            nb.set_num_threads(nb.config.NUMBA_NUM_THREADS)
 
     def _intersect_genes(
             self, 
