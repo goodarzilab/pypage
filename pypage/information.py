@@ -161,6 +161,10 @@ def joint_entropy_3d(
     return info
 
 
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
 def conditional_entropy(
         X: np.ndarray,
         Y: np.ndarray,
