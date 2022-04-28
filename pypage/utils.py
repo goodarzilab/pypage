@@ -132,8 +132,25 @@ def hypergeometric_test(
 def benjamini_hochberg(
         p: np.ndarray) -> np.ndarray:
     """
-    Benjamini-Hochberg p-value correction for multiple hypothesis testing.
-    https://stackoverflow.com/a/33532498
+    Benjamini-Hochberg p-value correction for multiple hypothesis testing. 
+
+    Parameters
+    ----------
+    p: np.ndarray
+        an array of p-values to correct
+
+    Returns
+    -------
+    np.ndarray
+        an array of adjusted p-values
+
+    Examples
+    --------
+    >>> pvals = np.random.random(1000000)
+    >>> pvals[:10] = np.random.random(10) * 1e-40
+    >>> qvals = benjamini_hochberg(pvals)
+    >>> qvals[qvals < 0.05].size
+    10
     """
     p = np.asfarray(p)
     by_descend = p.argsort()[::-1]
