@@ -25,15 +25,24 @@ def entropy(
     """Calculates the empirical entropy of an array.
     
     Calculated using the form:
-        H(X) = - \sigma{i=1}{n} P(X_{i})log P(X_{i})
+
+    .. math::
+        H(X) = -\sum_{i=1}^{n}{ P( X_{i} ) \log{P(X_{i})} }
+        
     
-    inputs:
-        X: np.ndarray
-            The unquantized array to calculate entropy over
-        x_bins: int
-            The number of bins to split the array into
-        base: int
-            The base of the logarithm
+    Parameters
+    ----------
+    X: np.ndarray
+        The unquantized array to calculate entropy over
+    x_bins: int
+        The number of bins to split the array into
+    base: int
+        The base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated entropy: H(X)
     """
     c_x = hist1D(X, x_bins).ravel()
     p_x = c_x / c_x.sum()
@@ -43,6 +52,7 @@ def entropy(
             continue
         info -= p_x[i] * np.log(p_x[i]) / np.log(base)
     return info
+
 
 @nb.jit(
     cache=True,
@@ -55,22 +65,31 @@ def joint_entropy(
         y_bins: int,
         base: int = 2) -> float:
     """Calculates the joint entropy of two random variables
+    
+    Calculated using the form:
 
-    inputs:
-        X: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Y: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        x_bins: int 
-            the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: int,
-            the number of bins in `Y`. equivalent to `max(Y) + 1`
+    .. math::
+        H(X,Y) = - \sum_{x∈X}\sum_{y∈Y} P(x,y) \log{P(x,y)}
 
-    outputs:
-        information: float
-            The calculated joint entropy
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated joint entropy H(X,Y)
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     p_xy = c_xy / c_xy.sum()
@@ -97,26 +116,35 @@ def joint_entropy_3d(
         base: int = 2) -> float:
     """Calculates the joint entropy of two random variables
 
-    inputs:
-        X: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Y: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Z: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        x_bins: int 
-            the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: int,
-            the number of bins in `Y`. equivalent to `max(Y) + 1`
-        z_bins: int,
-            the number of bins in `Z`. equivalent to `max(Z) + 1`
+    Calculated using the form:
 
-    outputs:
-        information: float
-            The calculated joint entropy
+    .. math::
+        H(X,Y,Z) = - \sum_{x∈X}\sum_{y∈Y}\sum_{z∈Z} P(x,y,z) \log{P(x,y,z)}
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Z: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    z_bins: int,
+        the number of bins in `Z`. equivalent to `max(Z) + 1`
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated joint entropy
     """
     c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
     p_xyz = c_xyz / c_xyz.sum()
@@ -141,23 +169,30 @@ def conditional_entropy(
         base: int = 2) -> float:
     """Calculates the conditional entropy of two random variables
 
-    H(X|Y) = - \sigma p(x,y) log \frac {p(x,y)} {p(y)}
+    Calculated using the form:
 
-    inputs:
-        X: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Y: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        x_bins: int 
-            the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: int,
-            the number of bins in `Y`. equivalent to `max(Y) + 1`
+    .. math::
+        H(X \mid Y) = - \sum_{x∈X,y∈Y} P(x,y) log{ \\frac {P(x,y)} {P(y)} }
 
-    outputs:
-        information: float
-            The calculated joint entropy
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated conditional entropy
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     c_y = c_xy.sum(axis=0)
@@ -189,23 +224,29 @@ def mutual_information(
     """Calculates mutual information for two arrays. 
     
     Calculated using the form:
-        I(X;Y) = \sigma_y \sigma_x P_(X,Y)(x,y) log{\frac{P_(X,Y)(x,y)}{P_X(x)P_Y(y)}}
 
-    inputs:
-        X: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Y: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        x_bins: int 
-            the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: int,
-            the number of bins in `Y`. equivalent to `max(Y) + 1`
+    .. math::
+        I(X;Y) = \sum_{x∈X,y∈Y} P_{X,Y}(x,y) \log{ \\frac {P_{X,Y}(x,y)} {P_X(x)P_Y(y)} }
 
-    outputs:
-        information: float
-            The calculated mutual information
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated mutual information
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     c_x = c_xy.sum(axis=1)
@@ -240,7 +281,34 @@ def conditional_mutual_information(
     """Calculates conditional mutual information for three arrays.
     
     Calculated using the form:
-        I(X;Y|Z) = \sigma_z \sigma_y \sigma_x P_(X,Y,Z)(x,y,z) log { \frac{P_Z(z)P_(X,Y,Z)(x,y,z)} {P_(X,Z)(x,z)P_(Y,Z)(y,z)}}
+
+    .. math::
+        I(X;Y \mid Z) = \sum_{x∈X,y∈Y,z∈Z} P_{X,Y,Z}(x,y,z) log { \\frac {P_Z(z)P_{X,Y,Z}(x,y,z)} {P_{X,Z}(x,z)P_{Y,Z}(y,z)}}
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Z: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    z_bins: int,
+        the number of bins in `Z`. equivalent to `max(Z) + 1`
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated conditional mutual information
     """
 
     c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
@@ -280,6 +348,28 @@ def calculate_mi_permutations(
         base: int = 2,
         n: int = 10000) -> np.ndarray:
     """calculates the MI for `n` permutations of X
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm
+    n: int
+        the number of permutations to perform (default = 10000)
+
+    Returns
+    -------
+    np.ndarray 
+        The calculated joint entropy for each of the permutations
     """
     permutations = np.zeros(n)
     for idx in nb.prange(n):
@@ -300,11 +390,46 @@ def measure_redundancy(
         x_bins: int,
         y_bins: int,
         z_bins: int,
-        base: int = 2) -> np.ndarray:
-    """Measures the reduncany of a pathway via a ratio of
+        base: int = 2) -> float:
+    """Measures the redundancy of a pathway via a ratio of
     conditional mutual information and mutual information
 
-    r_i = I(Y; X|Z) / I(Y;Z)
+    calculated using the form:
+
+    .. math::
+        R_i = \\frac {I(Y; X \mid Z)} {I(Y;Z)}
+
+    where:
+        X: Gene Expression
+
+        Y: Candidate Pathway
+        
+        Z: Accepted Pathway
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Z: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    z_bins: int,
+        the number of bins in `Z`. equivalent to `max(Z) + 1`
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated R-value
     """
     cmi = conditional_mutual_information(
             Y, 
