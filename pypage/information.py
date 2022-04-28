@@ -25,15 +25,24 @@ def entropy(
     """Calculates the empirical entropy of an array.
     
     Calculated using the form:
-        H(X) = - \sigma{i=1}{n} P(X_{i})log P(X_{i})
+
+    .. math::
+        H(X) = -\sum_{i=1}^{n}{ P( X_{i} ) log{ P( X_{i} ) } }
+        
     
-    inputs:
-        X: np.ndarray
-            The unquantized array to calculate entropy over
-        x_bins: int
-            The number of bins to split the array into
-        base: int
-            The base of the logarithm
+    Parameters
+    ----------
+    X: np.ndarray
+        The unquantized array to calculate entropy over
+    x_bins: int
+        The number of bins to split the array into
+    base: int
+        The base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated entropy: H(X)
     """
     c_x = hist1D(X, x_bins).ravel()
     p_x = c_x / c_x.sum()
@@ -43,6 +52,7 @@ def entropy(
             continue
         info -= p_x[i] * np.log(p_x[i]) / np.log(base)
     return info
+
 
 @nb.jit(
     cache=True,
