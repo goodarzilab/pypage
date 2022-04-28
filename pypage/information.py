@@ -13,6 +13,169 @@ from .hist import (
 from .utils import (
         shuffle_bin_array)
 
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def entropy(
+        X: np.ndarray,
+        x_bins: int,
+        base: int = 2) -> float:
+    """Calculates the empirical entropy of an array.
+    
+    Calculated using the form:
+        H(X) = - \sigma{i=1}{n} P(X_{i})log P(X_{i})
+    
+    inputs:
+        X: np.ndarray
+            The unquantized array to calculate entropy over
+        x_bins: int
+            The number of bins to split the array into
+        base: int
+            The base of the logarithm
+    """
+    c_x = hist1D(X, x_bins).ravel()
+    p_x = c_x / c_x.sum()
+    info = 0.
+    for i in np.arange(x_bins):
+        if p_x[i] == 0:
+            continue
+        info -= p_x[i] * np.log(p_x[i]) / np.log(base)
+    return info
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def joint_entropy(
+        X: np.ndarray,
+        Y: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2) -> float:
+    """Calculates the joint entropy of two random variables
+
+    inputs:
+        X: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Y: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        x_bins: int 
+            the number of bins in `X`. equivalent to `max(X) + 1`
+        y_bins: int,
+            the number of bins in `Y`. equivalent to `max(Y) + 1`
+
+    outputs:
+        information: float
+            The calculated joint entropy
+    """
+    c_xy = hist2D(X, Y, x_bins, y_bins)
+    p_xy = c_xy / c_xy.sum()
+    info = 0.
+    for x in np.arange(x_bins):
+        for y in np.arange(y_bins):
+            if p_xy[x][y] == 0:
+                continue
+            info -= p_xy[x][y] * np.log(p_xy[x][y]) / np.log(base)
+    return info
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def joint_entropy_3d(
+        X: np.ndarray,
+        Y: np.ndarray,
+        Z: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
+        base: int = 2) -> float:
+    """Calculates the joint entropy of two random variables
+
+    inputs:
+        X: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Y: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Z: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        x_bins: int 
+            the number of bins in `X`. equivalent to `max(X) + 1`
+        y_bins: int,
+            the number of bins in `Y`. equivalent to `max(Y) + 1`
+        z_bins: int,
+            the number of bins in `Z`. equivalent to `max(Z) + 1`
+
+    outputs:
+        information: float
+            The calculated joint entropy
+    """
+    c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
+    p_xyz = c_xyz / c_xyz.sum()
+    info = 0.
+    for x in np.arange(x_bins):
+        for y in np.arange(y_bins):
+            for z in np.arange(z_bins):
+                if p_xyz[x][y][z] == 0:
+                    continue
+                info -= p_xyz[x][y][z] \
+                        * np.log( p_xyz[x][y][z] ) \
+                        / np.log(base)
+
+    return info
+
+
+def conditional_entropy(
+        X: np.ndarray,
+        Y: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2) -> float:
+    """Calculates the conditional entropy of two random variables
+
+    H(X|Y) = - \sigma p(x,y) log \frac {p(x,y)} {p(y)}
+
+    inputs:
+        X: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Y: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        x_bins: int 
+            the number of bins in `X`. equivalent to `max(X) + 1`
+        y_bins: int,
+            the number of bins in `Y`. equivalent to `max(Y) + 1`
+
+    outputs:
+        information: float
+            The calculated joint entropy
+    """
+    c_xy = hist2D(X, Y, x_bins, y_bins)
+    c_y = c_xy.sum(axis=0)
+    
+    p_xy = c_xy / c_xy.sum()
+    p_y = c_y / c_y.sum()
+
+    info = 0.
+    for x in np.arange(x_bins):
+        for y in np.arange(y_bins):
+            if p_xy[x][y] == 0:
+                continue
+            info -= p_xy[x][y] *\
+                    np.log( (p_xy[x][y]) / p_y[y] ) \
+                    / np.log(base)
+    return info
+
+
 @nb.jit(
     cache=True,
     nogil=True,
