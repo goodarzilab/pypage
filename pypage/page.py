@@ -21,6 +21,19 @@ from typing import Optional
 
 
 class PAGE:
+    """
+    Pathway Analysis of Gene Expression [1]_
+
+
+    Methods
+    -------
+    run:
+        Perform the PAGE algorithm on the provided data
+
+    Notes
+    =====
+    .. [1] H. Goodarzi, O. Elemento, S. Tavazoie, "Revealing Global Regulatory Perturbations across Human Cancers." https://doi.org/10.1016/j.molcel.2009.11.016
+    """
     def __init__(
             self,
             n_shuffle: int = 1e4,
@@ -31,7 +44,44 @@ class PAGE:
             filter_redundant: bool = True,
             n_jobs: Optional[int] = None):
         """
+        Initialize object
+        
+        Parameters
+        ----------
+        
+        n_shuffle: int
+            the number of performed permutation tests 
+            (`default = 1e4`)
+        
+        alpha: float
+            the maximum p-value threshold to consider a pathway informative
+            with respect to the permuted mutual information distribution 
+            (`default = 5e-3`)
+
+        k: int
+            the number of contiguous uninformative pathways to consider before
+            stopping the informative pathway search
+            (`default = 20`)
+
+        r: float
+            the ratio of the conditional mutual information of a new accepted
+            pathway against the mutual information of that pathway against
+            all other accepted pathways. Only active when filter_redundant == True.
+            (`default = 5.0`)
+
+        base: int
+            the base of the logarithm used when calculating entropy
+            (`default = 2`)
+
+        filter_redundant: bool
+            whether to perform the pathway redundancy search
+            (`default = True`)
+
+        n_jobs: int
+            The number of parallel jobs to use in the analysis
+            (`default = all available cores`)
         """
+
         self.n_shuffle = int(n_shuffle)
         self.alpha = float(alpha)
         self.k = int(k)
@@ -232,6 +282,24 @@ class PAGE:
             exp: ExpressionProfile,
             ont: GeneOntology) -> pd.DataFrame:
         """
+        Perform the PAGE algorithm
+
+        Parameters
+        ==========
+        exp: ExpressionProfile
+            The ExpressionProfile to consider in the analysis
+        ont: GeneOntology
+            the GeneOntology to consider in the analysis
+
+        Returns
+        =======
+        pd.DataFrame
+            A dataframe representing the results of the analysis
+
+        Examples
+        ========
+        >>> p = PAGE()
+        >>> p.run(exp, ont)
         """
         shared_genes = self._intersect_genes(exp, ont)
         exp_bins, ont_bool = self._subset_matrices(exp, ont, shared_genes)
