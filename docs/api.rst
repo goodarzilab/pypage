@@ -41,3 +41,14 @@ Information
   information.conditional_mutual_information
   information.calculate_mi_permutations
   information.measure_redundancy
+
+Histogram
+---------
+.. module:: pypage.hist
+.. currentmodule:: pypage
+.. autosummary::
+  :toctree: generated/
+
+  hist.hist1D
+  hist.hist2D
+  hist.hist3D
