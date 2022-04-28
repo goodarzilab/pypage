@@ -69,7 +69,7 @@ def joint_entropy(
     Calculated using the form:
 
     .. math::
-        - \sum_{x∈X}\sum_{y∈Y} P(x,y) \log{P(x,y)}
+        H(X,Y) = - \sum_{x∈X}\sum_{y∈Y} P(x,y) \log{P(x,y)}
 
     Parameters
     ----------
@@ -119,7 +119,7 @@ def joint_entropy_3d(
     Calculated using the form:
 
     .. math::
-        - \sum_{x∈X}\sum_{y∈Y}\sum_{z∈Z} P(x,y,z) \log{P(x,y,z)}
+        H(X,Y,Z) = - \sum_{x∈X}\sum_{y∈Y}\sum_{z∈Z} P(x,y,z) \log{P(x,y,z)}
 
     Parameters
     ----------
