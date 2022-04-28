@@ -83,6 +83,56 @@ def joint_entropy(
     return info
 
 
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def joint_entropy_3d(
+        X: np.ndarray,
+        Y: np.ndarray,
+        Z: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
+        base: int = 2) -> float:
+    """Calculates the joint entropy of two random variables
+
+    inputs:
+        X: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Y: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Z: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        x_bins: int 
+            the number of bins in `X`. equivalent to `max(X) + 1`
+        y_bins: int,
+            the number of bins in `Y`. equivalent to `max(Y) + 1`
+        z_bins: int,
+            the number of bins in `Z`. equivalent to `max(Z) + 1`
+
+    outputs:
+        information: float
+            The calculated joint entropy
+    """
+    c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
+    p_xyz = c_xyz / c_xyz.sum()
+    info = 0.
+    for x in np.arange(x_bins):
+        for y in np.arange(y_bins):
+            for z in np.arange(z_bins):
+                if p_xyz[x][y][z] == 0:
+                    continue
+                info -= p_xyz[x][y][z] \
+                        * np.log( p_xyz[x][y][z] ) \
+                        / np.log(base)
+
+    return info
+
+
 def conditional_entropy(
         X: np.ndarray,
         Y: np.ndarray,
