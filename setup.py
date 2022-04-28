@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
    name='pypage',
-   version='0.0.4',
+   version='0.0.5',
    description='Python implementation of the PAGE algorithm',
    author='Noam Teyssier',
    packages=['pypage'],
