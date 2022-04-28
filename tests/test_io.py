@@ -3,7 +3,7 @@
 
 import pytest
 import pandas as pd
-from pypage.io import (
+from pypage import (
         ExpressionProfile,
         GeneOntology)
 
