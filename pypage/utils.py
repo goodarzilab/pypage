@@ -43,6 +43,25 @@ def empirical_pvalue(
         array: np.ndarray,
         value: float) -> float:
     """Calculates the empirical pvalue of a value given a distribution
+
+    Parameters
+    ----------
+    array: np.ndarray
+        an array of values representing the distribution to test against
+    value: float
+        a value to calculate the empirical p-value against `array`
+
+    Returns
+    -------
+    float
+        the empirical pvalue of the value against the provided array
+
+    Examples
+    --------
+    >>> a = np.random.random(100000)
+    >>> p = 0.95
+    >>> empirical_pvalue(a, p)
+    0.04974
     """
     m = array.max()
     if value > m:
