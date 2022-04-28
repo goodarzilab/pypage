@@ -25,3 +25,8 @@ jobs:
       run: |
         pip install pytest
         pytest -v
+
+    - name: Docs
+      run: |
+        cd docs/
+        make html
