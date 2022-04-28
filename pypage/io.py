@@ -12,6 +12,28 @@ class ExpressionProfile:
             self,
             expression_profile: pd.DataFrame):
         """
+        Parameters
+        ==========
+        expression_profile: pd.DataFrame
+            a two column dataframe where the first column is the gene and the
+            second column is the bin that gene belongs to
+
+        Attributes
+        ==========
+        genes: np.ndarray
+            the sorted list of genes found in the expression profile
+        bins: np.ndarray
+            the sorted list of bins found in the expression profile
+        n_genes: int
+            the number of genes found
+        n_bins: int
+            the number of bins found
+        bool_array: np.ndarray
+            a (n_bins, n_genes) bit array representing the bin-position of each gene
+        bin_array: np.ndarray
+            a (n_genes, ) array where each value represents the bin index of that gene
+        bin_sizes: np.ndarray
+            a (n_bins, ) array where each value represents the number of genes in that bin index
         """
 
         genes = {n: idx for idx, n in enumerate(np.sort(expression_profile.gene.unique()))}
@@ -46,7 +68,19 @@ class ExpressionProfile:
     def get_gene_subset(
             self,
             gene_subset: np.ndarray) -> np.ndarray:
-        """Indexed the bool array for the required gene subset. Expects the subset to be sorted
+        """
+        Index the bin-array for the required gene subset. 
+        Expects the subset to be sorted
+        
+        Parameters
+        ==========
+        gene_subset: np.ndarray
+            a list of genes to subset the bin_array to
+
+        Returns
+        =======
+        np.ndarray
+            the bin_array subsetted to the indices of the `gene_subset`
         """
         mask = np.isin(self.genes, gene_subset)
         return self.bin_array[mask]
@@ -58,6 +92,30 @@ class GeneOntology:
     def __init__(
             self,
             index_filename: str):
+        """
+        Parameters
+        ==========
+        index_filename: str 
+            filepath of a a two column dataframe where the first column is the gene 
+            and the second column is the pathway that gene belongs to
+
+        Attributes
+        ==========
+        genes: np.ndarray
+            the sorted list of genes found in the pathways
+        pathways: np.ndarray
+            the sorted list of pathways found in the index
+        n_genes: int
+            the number of genes found
+        n_pathways: int
+            the number of pathways found
+        bool_array: np.ndarray
+            a (n_pathways, n_genes) bit array representing the bin-position of each gene
+        pathway_sizes: np.ndarray
+            a (n_pathways, ) array where each value represents the number of genes in that pathway index
+        avg_p_size: float
+            the mean number of genes across pathways
+        """
 
         self.index_filename = index_filename
 
@@ -94,7 +152,19 @@ class GeneOntology:
     def get_gene_subset(
             self,
             gene_subset: np.ndarray) -> np.ndarray:
-        """Indexed the bool array for the required gene subset. Expects the subset to be sorted
+        """
+        Index the bool-array for the required gene subset. 
+        Expects the subset to be sorted
+        
+        Parameters
+        ==========
+        gene_subset: np.ndarray
+            a list of genes to subset the bin_array to
+
+        Returns
+        =======
+        np.ndarray
+            the bool_array subsetted to the indices of the `gene_subset`
         """
         mask = np.isin(self.genes, gene_subset)
         return self.bool_array[:, mask]
