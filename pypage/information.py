@@ -380,11 +380,46 @@ def measure_redundancy(
         x_bins: int,
         y_bins: int,
         z_bins: int,
-        base: int = 2) -> np.ndarray:
-    """Measures the reduncany of a pathway via a ratio of
+        base: int = 2) -> float:
+    """Measures the redundancy of a pathway via a ratio of
     conditional mutual information and mutual information
 
-    r_i = I(Y; X|Z) / I(Y;Z)
+    calculated using the form:
+
+    .. math::
+        R_i = \\frac {I(Y; X \mid Z)} {I(Y;Z)}
+
+    where:
+        X: Gene Expression
+
+        Y: Candidate Pathway
+        
+        Z: Accepted Pathway
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Z: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    z_bins: int,
+        the number of bins in `Z`. equivalent to `max(Z) + 1`
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    float
+        The calculated R-value
     """
     cmi = conditional_mutual_information(
             Y, 
