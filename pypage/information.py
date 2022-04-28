@@ -13,6 +13,36 @@ from .hist import (
 from .utils import (
         shuffle_bin_array)
 
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def entropy(
+        X: np.ndarray,
+        x_bins: int,
+        base: int=2) -> float:
+    """Calculates the empirical entropy of an array.
+    
+    Calculated using the form:
+        H(X) = - \sigma{i=1}{n} P(X_{i})log P(X_{i})
+    
+    inputs:
+        X: np.ndarray
+            The unquantized array to calculate entropy over
+        x_bins: int
+            The number of bins to split the array into
+        base: int
+            The base of the logarithm
+    """
+    c_x = hist1D(X, x_bins).ravel()
+    p_x = c_x / c_x.sum()
+    info = 0.
+    for i in np.arange(x_bins):
+        info -= p_x[i] * np.log(p_x[i]) / np.log(base)
+    return info
+
+
 @nb.jit(
     cache=True,
     nogil=True,
