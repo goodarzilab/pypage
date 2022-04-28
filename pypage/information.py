@@ -273,7 +273,32 @@ def conditional_mutual_information(
     """Calculates conditional mutual information for three arrays.
     
     Calculated using the form:
-        I(X;Y|Z) = \sigma_z \sigma_y \sigma_x P_(X,Y,Z)(x,y,z) log { \frac{P_Z(z)P_(X,Y,Z)(x,y,z)} {P_(X,Z)(x,z)P_(Y,Z)(y,z)}}
+
+    .. math::
+        I(X;Y \mid Z) = \sum_{x∈X,y∈Y,z∈Z} P_{X,Y,Z}(x,y,z) log { \\frac {P_Z(z)P_{X,Y,Z}(x,y,z)} {P_{X,Z}(x,z)P_{Y,Z}(y,z)}}
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Z: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    z_bins: int,
+        the number of bins in `Z`. equivalent to `max(Z) + 1`
+
+    Returns
+    -------
+    float
+        The calculated conditional mutual information
     """
 
     c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
