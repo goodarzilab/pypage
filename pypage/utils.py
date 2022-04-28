@@ -74,12 +74,41 @@ def hypergeometric_test(
         e_bins: np.ndarray, 
         o_bool: np.ndarray) -> np.ndarray:
     """
-    translating from: https://ars.els-cdn.com/content/image/1-s2.0-S1097276509008570-mmc1.pdf
     
-    m = n: number of genes in the pathway
-    x = k: number of genes in the bin which are also in the pathway
-    n = N: number of genes in the bin
-    N = M: total number of genes
+    Variable names from supplemental [1]_ translated to scipy documentation [2]_
+
+        ``n`` : number of genes in the pathway
+        
+        ``k`` : number of genes in the bin which are also in the pathway
+        
+        ``N`` : number of genes in the bin
+        
+        ``M`` : total number of genes
+
+    Hypergeometric Form:
+
+    .. math::
+
+        p(k, M, n, N) = \\frac {\\binom{n}{k} \\binom{M-n}{N-k}} {\\binom{M}{N}}
+
+    Parameters
+    ----------
+    e_bins: np.ndarray
+        the 1D array where each element represents the bin index of a particular gene
+    o_bool: np.ndarray
+        the 1D array where each element represents whether the gene is found in the present pathway
+
+    Results
+    -------
+    np.ndarray
+        a 2D array of shape (2, n_bins). 
+        the first array represents the p-value of overrepresentation
+        the second array represents the p-value of underrepresentation
+
+    Notes
+    -----
+    .. [1] PAGE Supplemental Methods. https://ars.els-cdn.com/content/image/1-s2.0-S1097276509008570-mmc1.pdf
+    .. [2] scipy hypergeometric documentation. https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.hypergeom.html
     """
     n_bins = e_bins.max() + 1
     ct = hist2D(e_bins, o_bool, n_bins, 2)
