@@ -83,6 +83,8 @@ def joint_entropy(
         the number of bins in `X`. equivalent to `max(X) + 1`
     y_bins: int,
         the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm
 
     Returns
     -------
@@ -136,6 +138,8 @@ def joint_entropy_3d(
         the number of bins in `Y`. equivalent to `max(Y) + 1`
     z_bins: int,
         the number of bins in `Z`. equivalent to `max(Z) + 1`
+    base: int
+        the base of the logarithm
 
     Returns
     -------
@@ -182,6 +186,8 @@ def conditional_entropy(
         the number of bins in `X`. equivalent to `max(X) + 1`
     y_bins: int,
         the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm
 
     Returns
     -------
@@ -234,6 +240,8 @@ def mutual_information(
         the number of bins in `X`. equivalent to `max(X) + 1`
     y_bins: int,
         the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm
 
     Returns
     -------
@@ -294,6 +302,8 @@ def conditional_mutual_information(
         the number of bins in `Y`. equivalent to `max(Y) + 1`
     z_bins: int,
         the number of bins in `Z`. equivalent to `max(Z) + 1`
+    base: int
+        the base of the logarithm
 
     Returns
     -------
@@ -352,7 +362,7 @@ def calculate_mi_permutations(
     y_bins: int,
         the number of bins in `Y`. equivalent to `max(Y) + 1`
     base: int
-        the base of the logarithm to use (default = 2)
+        the base of the logarithm
     n: int
         the number of permutations to perform (default = 10000)
 
