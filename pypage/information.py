@@ -165,23 +165,28 @@ def conditional_entropy(
         base: int = 2) -> float:
     """Calculates the conditional entropy of two random variables
 
-    H(X|Y) = - \sigma p(x,y) log \frac {p(x,y)} {p(y)}
+    Calculated using the form:
 
-    inputs:
-        X: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Y: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        x_bins: int 
-            the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: int,
-            the number of bins in `Y`. equivalent to `max(Y) + 1`
+    .. math::
+        H(X \mid Y) = - \sum_{x∈X,y∈Y} P(x,y) log{ \\frac {P(x,y)} {P(y)} }
 
-    outputs:
-        information: float
-            The calculated joint entropy
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+
+    Returns
+    -------
+    float
+        The calculated joint entropy
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     c_y = c_xy.sum(axis=0)
