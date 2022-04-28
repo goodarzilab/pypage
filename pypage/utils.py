@@ -13,6 +13,25 @@ from .hist import (
 def shuffle_bin_array(
         bin_array: np.ndarray) -> np.ndarray:
     """Shuffles the bin identities for a provided bin array
+
+    Parameters
+    ----------
+    bin_array: np.ndarray
+        any type of array to be shuffled
+
+    Returns
+    -------
+    np.ndarray
+        a shuffled copy of `bin_array`
+
+    Examples
+    --------
+    >>> a = np.random.choice(3, size=5)
+    >>> b = shuffle_bin_array(a)
+    >>> print(a)
+    [0 1 4 1 2]
+    >>> print(b)
+    [2 4 1 1 0]
     """
     shuf = bin_array.copy()
     np.random.shuffle(shuf)
