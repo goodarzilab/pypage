@@ -8,6 +8,13 @@ cd pypage
 pip install -e .
 ```
 
+# Building Documentation
+```bash
+cd docs/
+make html
+firefox _build/html/index.html
+```
+
 # Usage
 This implementation is meant to be used as a python module. The process of using the module is broken up into 3 major steps.
 
