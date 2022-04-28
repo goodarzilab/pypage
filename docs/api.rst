@@ -24,3 +24,20 @@ IO
 
   ExpressionProfile
   GeneOntology
+
+
+Information
+-----------
+.. module:: pypage.information
+.. currentmodule:: pypage
+.. autosummary::
+  :toctree: generated/
+
+  information.entropy
+  information.joint_entropy
+  information.joint_entropy_3d
+  information.conditional_entropy
+  information.mutual_information
+  information.conditional_mutual_information
+  information.calculate_mi_permutations
+  information.measure_redundancy
