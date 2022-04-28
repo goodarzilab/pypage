@@ -27,7 +27,7 @@ def entropy(
     Calculated using the form:
 
     .. math::
-        H(X) = -\sum_{i=1}^{n}{ P( X_{i} ) log{ P( X_{i} ) } }
+        H(X) = -\sum_{i=1}^{n}{ P( X_{i} ) \log{P(X_{i})} }
         
     
     Parameters
@@ -65,22 +65,29 @@ def joint_entropy(
         y_bins: int,
         base: int = 2) -> float:
     """Calculates the joint entropy of two random variables
+    
+    Calculated using the form:
 
-    inputs:
-        X: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Y: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        x_bins: int 
-            the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: int,
-            the number of bins in `Y`. equivalent to `max(Y) + 1`
+    .. math::
+        - \sum_{x∈X}\sum_{y∈Y} P(x,y) \log{P(x,y)}
 
-    outputs:
-        information: float
-            The calculated joint entropy
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+
+    Returns
+    -------
+    float
+        The calculated joint entropy H(X,Y)
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     p_xy = c_xy / c_xy.sum()
