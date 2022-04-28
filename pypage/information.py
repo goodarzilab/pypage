@@ -186,7 +186,7 @@ def conditional_entropy(
     Returns
     -------
     float
-        The calculated joint entropy
+        The calculated conditional entropy
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     c_y = c_xy.sum(axis=0)
@@ -338,6 +338,28 @@ def calculate_mi_permutations(
         base: int = 2,
         n: int = 10000) -> np.ndarray:
     """calculates the MI for `n` permutations of X
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    base: int
+        the base of the logarithm to use (default = 2)
+    n: int
+        the number of permutations to perform (default = 10000)
+
+    Returns
+    -------
+    np.ndarray 
+        The calculated joint entropy for each of the permutations
     """
     permutations = np.zeros(n)
     for idx in nb.prange(n):
