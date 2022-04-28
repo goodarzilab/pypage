@@ -114,26 +114,33 @@ def joint_entropy_3d(
         base: int = 2) -> float:
     """Calculates the joint entropy of two random variables
 
-    inputs:
-        X: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Y: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        Z: np.ndarray
-            a 1D array where each value represents the bin index
-            for a gene
-        x_bins: int 
-            the number of bins in `X`. equivalent to `max(X) + 1`
-        y_bins: int,
-            the number of bins in `Y`. equivalent to `max(Y) + 1`
-        z_bins: int,
-            the number of bins in `Z`. equivalent to `max(Z) + 1`
+    Calculated using the form:
 
-    outputs:
-        information: float
-            The calculated joint entropy
+    .. math::
+        - \sum_{x∈X}\sum_{y∈Y}\sum_{z∈Z} P(x,y,z) \log{P(x,y,z)}
+
+    Parameters
+    ----------
+    X: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Y: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    Z: np.ndarray
+        a 1D array where each value represents the bin index
+        for a gene
+    x_bins: int 
+        the number of bins in `X`. equivalent to `max(X) + 1`
+    y_bins: int,
+        the number of bins in `Y`. equivalent to `max(Y) + 1`
+    z_bins: int,
+        the number of bins in `Z`. equivalent to `max(Z) + 1`
+
+    Returns
+    -------
+    float
+        The calculated joint entropy
     """
     c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
     p_xyz = c_xyz / c_xyz.sum()
