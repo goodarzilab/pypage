@@ -52,3 +52,15 @@ Histogram
   hist.hist1D
   hist.hist2D
   hist.hist3D
+
+Utils
+-----
+.. module:: pypage.utils
+.. currentmodule:: pypage
+.. autosummary::
+  :toctree: generated/
+
+  utils.shuffle_bin_array
+  utils.empirical_pvalue
+  utils.hypergeometric_test
+  utils.benjamini_hochberg
