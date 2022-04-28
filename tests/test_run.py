@@ -3,8 +3,8 @@
 
 import pytest 
 import pandas as pd
-from pypage.page import PAGE
-from pypage.io import (
+from pypage import (
+        PAGE,
         ExpressionProfile, 
         GeneOntology)
 
@@ -23,7 +23,7 @@ def load_ontology():
 
 
 def test_run(load_expression, load_ontology):
-    p = PAGE(n_shuffle=5)
+    p = PAGE(n_shuffle=5, k=2)
     results = p.run(
             load_expression,
             load_ontology)
