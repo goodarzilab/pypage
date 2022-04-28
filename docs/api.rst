@@ -1,7 +1,3 @@
-.. module:: pypage
-.. automodule:: pypage
-  :noindex:
-
 API
 ===
 
