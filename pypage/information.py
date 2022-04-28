@@ -21,7 +21,7 @@ from .utils import (
 def entropy(
         X: np.ndarray,
         x_bins: int,
-        base: int=2) -> float:
+        base: int = 2) -> float:
     """Calculates the empirical entropy of an array.
     
     Calculated using the form:
@@ -39,7 +39,47 @@ def entropy(
     p_x = c_x / c_x.sum()
     info = 0.
     for i in np.arange(x_bins):
+        if p_x[i] == 0:
+            continue
         info -= p_x[i] * np.log(p_x[i]) / np.log(base)
+    return info
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True)
+def joint_entropy(
+        X: np.ndarray,
+        Y: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2) -> float:
+    """Calculates the joint entropy of two random variables
+
+    inputs:
+        X: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        Y: np.ndarray
+            a 1D array where each value represents the bin index
+            for a gene
+        x_bins: int 
+            the number of bins in `X`. equivalent to `max(X) + 1`
+        y_bins: int,
+            the number of bins in `Y`. equivalent to `max(Y) + 1`
+
+    outputs:
+        information: float
+            The calculated joint entropy
+    """
+    c_xy = hist2D(X, Y, x_bins, y_bins)
+    p_xy = c_xy / c_xy.sum()
+    info = 0.
+    for x in np.arange(x_bins):
+        for y in np.arange(y_bins):
+            if p_xy[x][y] == 0:
+                continue
+            info -= p_xy[x][y] * np.log(p_xy[x][y]) / np.log(base)
     return info
 
 
