@@ -11,34 +11,31 @@ from pypage import (
 N_GENES=1000
 N_BINS=5
 
-@pytest.fixture()
-def expression_dataframe():
+def get_expression() -> (np.ndarray, np.ndarray):
     genes = np.array([f"g.{g}" for g in np.arange(N_GENES)])
     scores = np.random.normal(size=N_GENES)
-    return pd.DataFrame({
-        "gene": genes,
-        "score": scores})
+    return genes, scores
 
-@pytest.fixture()
-def bins_dataframe():
+def get_bins() -> (np.ndarray, np.ndarray):
     genes = np.array([f"g.{g}" for g in np.arange(N_GENES)])
-    scores = np.random.choice(N_BINS, size=N_GENES)
-    return pd.DataFrame({
-        "gene": genes,
-        "score": scores})
+    bins = np.random.choice(N_BINS, size=N_GENES)
+    return genes, bins
 
-def test_load_expression_nobins(expression_dataframe):
-    exp = ExpressionProfile(expression_dataframe)
+def test_load_expression_nobins():
+    genes, scores = get_expression()
+    exp = ExpressionProfile(genes, scores)
     assert exp.n_genes == N_GENES
     assert exp.n_bins == 10
 
-def test_load_expression(expression_dataframe):
-    exp = ExpressionProfile(expression_dataframe, n_bins=N_BINS)
+def test_load_expression():
+    genes, bins = get_bins()
+    exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
     assert exp.n_genes == N_GENES
     assert exp.n_bins == N_BINS
 
-def test_load_bins(bins_dataframe):
-    exp = ExpressionProfile(bins_dataframe, n_bins=N_BINS)
+def test_load_bins():
+    genes, bins = get_bins()
+    exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
     assert exp.n_genes == N_GENES
     assert exp.n_bins == N_BINS
 
