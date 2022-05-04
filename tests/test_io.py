@@ -33,6 +33,19 @@ def test_load_expression():
     assert exp.n_genes == N_GENES
     assert exp.n_bins == N_BINS
 
+def test_load_expression_strategy():
+    genes, bins = get_bins()
+
+    hist_exp = ExpressionProfile(genes, bins, n_bins=N_BINS, bin_strategy='hist')
+    assert hist_exp.n_genes == N_GENES
+    assert hist_exp.n_bins == N_BINS
+
+    split_exp = ExpressionProfile(genes, bins, n_bins=N_BINS, bin_strategy='split')
+    assert split_exp.n_genes == N_GENES
+    assert split_exp.n_bins == N_BINS
+
+    assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)
+
 def test_load_bins():
     genes, bins = get_bins()
     exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
