@@ -13,13 +13,13 @@ class ExpressionProfile:
     Attributes
     ==========
     genes: np.ndarray
-        the sorted list of genes found in the expression profile
+        the sorted list of genes provided
     bins: np.ndarray
-        the sorted list of bins found in the expression profile
+        the sorted list of bins provided / calculated
     n_genes: int
         the number of genes found
     n_bins: int
-        the number of bins found
+        the number of bins found / calculated
     bool_array: np.ndarray
         a (n_bins, n_genes) bit array representing the bin-position of each gene
     bin_array: np.ndarray
@@ -34,31 +34,39 @@ class ExpressionProfile:
     """
     def __init__(
             self,
-            expression_profile: pd.DataFrame,
+            x: np.ndarray,
+            y: np.ndarray,
             is_bin: bool = False,
             n_bins: Optional[int] = None):
         """
         Parameters
         ==========
-        expression_profile: pd.DataFrame
-            a two column dataframe where the first column is the gene and the
-            second column is the bin that gene belongs to or the expression of
-            that gene.
-
+        x: np.ndarray
+            The array representing the gene names
+        y: np.ndarray
+            The array representing either the continuous expression value
+            of a specific gene, or the bin/cluster that gene belongs to.
         is_bin: bool
             whether the provided dataframe is prebinned. 
-
         n_bins: int
         """
         self._is_bin = is_bin
+        self._validate_inputs(x, y)
 
-        genes = expression_profile.iloc[:, 0].values
-        expr = expression_profile.iloc[:, 1].values
-
-        self._load_genes(genes)
-        bins = self._load_expression(expr, n_bins)
-        self._build_bool_array(genes, bins)
+        self._load_genes(x)
+        bins = self._load_expression(y, n_bins)
+        self._build_bool_array(x, bins)
         self._build_bin_array()
+
+    def _validate_inputs(
+            self,
+            x: np.ndarray,
+            y: np.ndarray):
+        """validates inputs are as expected
+        """
+        assert x.size > 0
+        assert x.size == y.size
+        assert x.shape == y.shape
 
     def _load_genes(
             self,
