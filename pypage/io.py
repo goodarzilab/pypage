@@ -1,8 +1,10 @@
 """Data input and output handling
 """
 
+
 import numpy as np
 import pandas as pd
+from typing import Optional
 
 
 class ExpressionProfile:
@@ -32,35 +34,91 @@ class ExpressionProfile:
     """
     def __init__(
             self,
-            expression_profile: pd.DataFrame):
+            expression_profile: pd.DataFrame,
+            is_bin: bool = False,
+            n_bins: Optional[int] = None):
         """
         Parameters
         ==========
         expression_profile: pd.DataFrame
             a two column dataframe where the first column is the gene and the
-            second column is the bin that gene belongs to
+            second column is the bin that gene belongs to or the expression of
+            that gene.
 
+        is_bin: bool
+            whether the provided dataframe is prebinned. 
+
+        n_bins: int
         """
+        self._is_bin = is_bin
 
-        genes = {n: idx for idx, n in enumerate(np.sort(expression_profile.gene.unique()))}
-        bins = {n: idx for idx, n in enumerate(np.sort(expression_profile.bin.unique()))}
+        genes = expression_profile.iloc[:, 0].values
+        expr = expression_profile.iloc[:, 1].values
 
-        self.genes = np.array(list(genes.keys()))
-        self.bins= np.array(list(bins.keys()))
+        self._load_genes(genes)
+        bins = self._load_expression(expr, n_bins)
+        self._build_bool_array(genes, bins)
+        self._build_bin_array()
 
+    def _load_genes(
+            self,
+            genes: np.ndarray) -> np.ndarray:
+        """loads the genes from the dataframe
+        """
+        self.gene_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(genes)))}
+        self.genes = np.array(list(self.gene_indices.keys()))
         self.n_genes = self.genes.size
-        self.n_bins = self.bins.size
 
+    def _load_expression(
+            self, 
+            expression: np.ndarray,
+            n_bins: Optional[int]) -> np.ndarray:
+        """loads the expression/bin data from the dataframe
+        """
+        if self._is_bin:
+            self.n_bins = np.unique(expression).size
+            return self._load_bins(expression)
+        else:
+            if not n_bins:
+                self.n_bins = 10
+            else:
+                self.n_bins = n_bins
+            bins = self._build_bin_indices(expression)
+            return self._load_bins(bins)
 
-        # builds bool array
-        self.bool_array = np.zeros((self.n_bins, self.n_genes), dtype=int)
-        for g, b in expression_profile.values:
-            self.bool_array[bins[b]][genes[g]] += 1
-
-        # builds bin array
-        self.bin_array = np.argmax(self.bool_array, axis=0)
+    def _build_bin_indices(
+            self,
+            expression: np.ndarray,
+            epsilon: float = 1e-6) -> np.ndarray:
+        """converts expression data to binned data
+        """
+        self.bin_sizes, self.bin_ranges = np.histogram(expression, bins=self.n_bins)
+        self.bin_ranges[-1] += epsilon # added because digitize is not inclusive at maximum 
+        return np.digitize(expression, self.bin_ranges)
         
-        self.bin_sizes = self.bool_array.sum(axis=1)
+    def _load_bins(
+            self, 
+            bins: np.ndarray) -> np.ndarray:
+        """loads the bin data from an array
+        """
+        self.bin_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(bins)))}
+        self.bins = np.array(list(self.bin_indices.keys()))
+        return bins
+
+    def _build_bool_array(
+            self,
+            genes: np.ndarray,
+            bins: np.ndarray):
+        """creates the internal bool array
+        """
+        self.bool_array = np.zeros((self.n_bins, self.n_genes), dtype=int)
+        for g, b in zip(genes, bins):
+            self.bool_array[self.bin_indices[b]][self.gene_indices[g]] += 1
+
+    def _build_bin_array(self):
+        """creates the internal bin array
+        """
+        self.bin_array = np.argmax(self.bool_array, axis=0)
 
     def __repr__(
             self) -> str:
