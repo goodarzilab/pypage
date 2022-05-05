@@ -130,6 +130,8 @@ class GeneOntology:
             min_size = 0
         if not max_size:
             max_size = np.max(self.pathway_sizes)
+        assert min_size >= 0, "Provided minimum must be >= 0"
+        assert max_size > min_size, f"Provided maximum must be > min_size: {min_size}"
         
         # determine pathway-level mask
         p_mask = (self.pathway_sizes >= min_size) & (self.pathway_sizes <= max_size)
