@@ -27,11 +27,20 @@ from pypage.io import (ExpressionProfile, GeneOntology)
 from pypage.page import PAGE
 
 # 1. load expression data
-exp_frame = pd.read_csv("example_data/AP2S1.tab.gz", sep="\t", header=None, names=["gene", "bin"])
-exp = ExpressionProfile(exp_frame)
+exp_frame = pd.read_csv(
+  "example_data/AP2S1.tab.gz", 
+  sep="\t", 
+  header=None, 
+  names=["gene", "bin"])
+exp = ExpressionProfile(exp_frame.gene, exp_frame.bin)
 
 # 2. load ontology data
-ont = GeneOntology("example_data/GO_BP_2021_index.txt.gz")
+ont_frame = pd.read_csv(
+  "example_data/GO_BP_2021_index.txt.gz", 
+  sep="\t", 
+  header=None, 
+  names=["gene", "pathway"])
+ont = GeneOntology(ont_frame.gene, ont_frame.pathway)
 
 # 3. Perform the statistical test
 p = PAGE(n_shuffle=500)
