@@ -45,9 +45,23 @@ class GeneOntology:
             an array associated pathways
         """
 
+        self._validate_inputs(genes, pathways)
         self._load_genes(genes)
         self._load_pathways(pathways)
         self._build_bool_array(genes, pathways)
+    
+    def _validate_inputs(
+            self,
+            x: np.ndarray,
+            y: np.ndarray):
+        """validates inputs are as expected
+        """
+        assert x.size > 0,\
+            "provided array must not be empty"
+        assert x.size == y.size,\
+            "genes and pathway arrays must be equal sized"
+        assert x.shape == y.shape,\
+            "genes and pathway arrays must be equally shaped"
 
     def _load_genes(
             self, 
