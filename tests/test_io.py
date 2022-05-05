@@ -2,25 +2,59 @@
 """
 
 import pytest
+import numpy as np
 import pandas as pd
 from pypage import (
         ExpressionProfile,
         GeneOntology)
 
-@pytest.fixture()
-def load_expression_dataframe():
-    return pd.read_csv(
-        "example_data/AP2S1.tab.gz", 
-        sep="\t",
-        header=None,
-        names=["gene", "bin"])
+N_GENES=1000
+N_BINS=5
+T = 100
 
+def get_expression() -> (np.ndarray, np.ndarray):
+    genes = np.array([f"g.{g}" for g in np.arange(N_GENES)])
+    scores = np.random.normal(size=N_GENES)
+    return genes, scores
 
-def test_load_expression(load_expression_dataframe):
-    frame = load_expression_dataframe
-    exp = ExpressionProfile(frame)
-    assert exp.n_genes == frame.gene.unique().size
-    assert exp.n_bins == frame.bin.unique().size
+def get_bins() -> (np.ndarray, np.ndarray):
+    genes = np.array([f"g.{g}" for g in np.arange(N_GENES)])
+    bins = np.random.choice(N_BINS, size=N_GENES)
+    return genes, bins
+
+def test_load_expression_nobins():
+    for _ in np.arange(T):
+        genes, scores = get_expression()
+        exp = ExpressionProfile(genes, scores)
+        assert exp.n_genes == N_GENES
+        assert exp.n_bins == 10
+
+def test_load_expression():
+    for _ in np.arange(T):
+        genes, expression = get_expression()
+        exp = ExpressionProfile(genes, expression, n_bins=N_BINS)
+        assert exp.n_genes == N_GENES
+        assert exp.n_bins == N_BINS
+
+def test_load_expression_strategy():
+    for _ in np.arange(T):
+        genes, expression = get_expression()
+
+        hist_exp = ExpressionProfile(genes, expression, n_bins=N_BINS, bin_strategy='hist')
+        assert hist_exp.n_genes == N_GENES
+        assert hist_exp.n_bins == N_BINS
+
+        split_exp = ExpressionProfile(genes, expression, n_bins=N_BINS, bin_strategy='split')
+        assert split_exp.n_genes == N_GENES
+        assert split_exp.n_bins == N_BINS
+
+        assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)
+
+def test_load_bins():
+    genes, bins = get_bins()
+    exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
+    assert exp.n_genes == N_GENES
+    assert exp.n_bins == N_BINS
 
 
 def test_load_ontology():
