@@ -14,8 +14,12 @@ class GeneOntology:
     ==========
     genes: np.ndarray
         the sorted list of genes found in the pathways
+    gene_indices: np.ndarray
+        a dictionary where keys are gene names and values are associated indices
     pathways: np.ndarray
         the sorted list of pathways found in the index
+    pathway_indices: np.ndarray
+        a dictionary where keys are pathway names and values are associated indices
     n_genes: int
         the number of genes found
     n_pathways: int
@@ -34,43 +38,48 @@ class GeneOntology:
     """
     def __init__(
             self,
-            index_filename: str):
+            genes: np.ndarray,
+            pathways: np.ndarray):
         """
         Parameters
         ==========
-        index_filename: str 
-            filepath of a a two column dataframe where the first column is the gene 
-            and the second column is the pathway that gene belongs to
+        genes: np.ndarray
+            an array of gene names
+        pathways: np.ndarray
+            an array associated pathways
         """
 
-        self.index_filename = index_filename
+        self._load_genes(genes)
+        self._load_pathways(pathways)
+        self._build_bool_array(genes, pathways)
 
-        # load files
-        self._load_index()
-
-    def _load_index(self):
+    def _load_genes(
+            self, 
+            genes: np.ndarray):
+        """load genes and associated indices
         """
-        loads the index file representing the gene to pathway mapping
-        """
-        index = pd.read_csv(
-                self.index_filename, 
-                sep="\t",
-                header=None,
-                names=["gene", "pathway"])
-        
-        pathways = {n: idx for idx, n in enumerate(np.sort(index.pathway.unique()))}
-        genes = {n: idx for idx, n in enumerate(np.sort(index.gene.unique()))}
-
-        self.genes = np.array(list(genes.keys()))
-        self.pathways = np.array(list(pathways.keys()))
-
+        self.gene_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(genes)))}
+        self.genes = np.array(list(self.gene_indices.keys()))
         self.n_genes = self.genes.size
+
+    def _load_pathways(
+            self, 
+            pathways: np.ndarray):
+        """load pathways and associated indices
+        """
+        self.pathway_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(pathways)))}
+        self.pathways = np.array(list(self.pathway_indices.keys()))
         self.n_pathways = self.pathways.size
 
-        # builds bool array
+    def _build_bool_array(
+            self,
+            genes: np.ndarray,
+            pathways: np.ndarray):
+        """create the bool array of genes/pathway interactions
+        """
         self.bool_array = np.zeros((self.n_pathways, self.n_genes), dtype=int)
-        for g, p in index.values:
-            self.bool_array[pathways[p]][genes[g]] += 1
+        for g, p in zip(genes, pathways):
+            self.bool_array[self.pathway_indices[p]][self.gene_indices[g]] += 1
 
         self.pathway_sizes = self.bool_array.sum(axis=1)
         self.avg_p_size = self.pathway_sizes.mean()
