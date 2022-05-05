@@ -15,7 +15,7 @@ def load_expression():
         sep="\t",
         header=None,
         names=["gene", "bin"])
-    return ExpressionProfile(frame)
+    return ExpressionProfile(frame.iloc[:, 0], frame.iloc[:, 1], is_bin=True)
 
 @pytest.fixture()
 def load_ontology():
