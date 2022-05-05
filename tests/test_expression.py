@@ -39,6 +39,23 @@ def test_load_expression():
         assert exp.n_bins == N_BINS
 
 
+def test_load_expression_assertion():
+    for i in np.arange(T):
+        genes, expression = get_expression()
+
+        if i % 2 == 0:
+            genes = genes[np.random.random(N_GENES) < 0.3]
+        else:
+            expression = expression[np.random.random(N_GENES) < 0.3]
+
+        try:
+            ont = ExpressionProfile(genes, expression)
+        except AssertionError:
+            continue
+
+        assert False
+
+
 def test_load_expression_strategy_hist():
     for _ in np.arange(T):
         genes, expression = get_expression()
