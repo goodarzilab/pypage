@@ -17,12 +17,6 @@ def get_ontology() -> (np.ndarray, np.ndarray):
     return genes, pathways
 
 
-def test_load_ontology():
-    for _ in np.arange(T):
-        genes, pathways = get_ontology()
-        ont = GeneOntology(genes, pathways)
-
-
 def filter_assertions(
         ont: GeneOntology, 
         mask: np.ndarray, 
@@ -35,6 +29,29 @@ def filter_assertions(
     assert ont.pathways.size == filtered_pathways.size
     assert np.all(ont.pathways == filtered_pathways)
     assert np.all(ont.pathway_sizes == filtered_counts)
+
+
+def test_load_ontology():
+    for _ in np.arange(T):
+        genes, pathways = get_ontology()
+        ont = GeneOntology(genes, pathways)
+
+
+def test_load_ontology_assertion():
+    for i in np.arange(T):
+        genes, pathways = get_ontology()
+
+        if i % 2 == 0:
+            genes = genes[np.random.random(N_GENES) < 0.3]
+        else:
+            pathways = pathways[np.random.random(N_GENES) < 0.3]
+
+        try:
+            ont = GeneOntology(genes, pathways)
+        except AssertionError:
+            continue
+
+        assert False
 
 
 def test_ontology_min_filtering():
