@@ -14,8 +14,12 @@ class GeneOntology:
     ==========
     genes: np.ndarray
         the sorted list of genes found in the pathways
+    gene_indices: np.ndarray
+        a dictionary where keys are gene names and values are associated indices
     pathways: np.ndarray
         the sorted list of pathways found in the index
+    pathway_indices: np.ndarray
+        a dictionary where keys are pathway names and values are associated indices
     n_genes: int
         the number of genes found
     n_pathways: int
