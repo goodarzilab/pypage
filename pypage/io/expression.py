@@ -14,8 +14,12 @@ class ExpressionProfile:
     ==========
     genes: np.ndarray
         the sorted list of genes provided
+    gene_indices: dict
+        a dictionary where keys are gene names and values are indices
     bins: np.ndarray
         the sorted list of bins provided / calculated
+    bin_indices: dict
+        a dictionary where keys are bin names and values are indices
     n_genes: int
         the number of genes found
     n_bins: int
