@@ -15,11 +15,23 @@ def load_expression():
         sep="\t",
         header=None,
         names=["gene", "bin"])
-    return ExpressionProfile(frame.iloc[:, 0], frame.iloc[:, 1], is_bin=True)
+
+    return ExpressionProfile(
+            frame.iloc[:, 0], 
+            frame.iloc[:, 1], 
+            is_bin=True)
 
 @pytest.fixture()
 def load_ontology():
-    return GeneOntology("example_data/GO_BP_2021_index.txt.gz")
+    frame = pd.read_csv(
+            "example_data/GO_BP_2021_index.txt.gz",
+            sep="\t",
+            header=None,
+            names=["gene", "pathway"])
+
+    return GeneOntology(
+            frame.iloc[:, 0],
+            frame.iloc[:, 1])
 
 
 def test_run(load_expression, load_ontology):
