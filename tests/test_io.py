@@ -10,6 +10,7 @@ from pypage import (
 
 N_GENES=1000
 N_BINS=5
+T = 100
 
 def get_expression() -> (np.ndarray, np.ndarray):
     genes = np.array([f"g.{g}" for g in np.arange(N_GENES)])
@@ -22,29 +23,32 @@ def get_bins() -> (np.ndarray, np.ndarray):
     return genes, bins
 
 def test_load_expression_nobins():
-    genes, scores = get_expression()
-    exp = ExpressionProfile(genes, scores)
-    assert exp.n_genes == N_GENES
-    assert exp.n_bins == 10
+    for _ in np.arange(T):
+        genes, scores = get_expression()
+        exp = ExpressionProfile(genes, scores)
+        assert exp.n_genes == N_GENES
+        assert exp.n_bins == 10
 
 def test_load_expression():
-    genes, bins = get_bins()
-    exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
-    assert exp.n_genes == N_GENES
-    assert exp.n_bins == N_BINS
+    for _ in np.arange(T):
+        genes, expression = get_expression()
+        exp = ExpressionProfile(genes, expression, n_bins=N_BINS)
+        assert exp.n_genes == N_GENES
+        assert exp.n_bins == N_BINS
 
 def test_load_expression_strategy():
-    genes, bins = get_bins()
+    for _ in np.arange(T):
+        genes, expression = get_expression()
 
-    hist_exp = ExpressionProfile(genes, bins, n_bins=N_BINS, bin_strategy='hist')
-    assert hist_exp.n_genes == N_GENES
-    assert hist_exp.n_bins == N_BINS
+        hist_exp = ExpressionProfile(genes, expression, n_bins=N_BINS, bin_strategy='hist')
+        assert hist_exp.n_genes == N_GENES
+        assert hist_exp.n_bins == N_BINS
 
-    split_exp = ExpressionProfile(genes, bins, n_bins=N_BINS, bin_strategy='split')
-    assert split_exp.n_genes == N_GENES
-    assert split_exp.n_bins == N_BINS
+        split_exp = ExpressionProfile(genes, expression, n_bins=N_BINS, bin_strategy='split')
+        assert split_exp.n_genes == N_GENES
+        assert split_exp.n_bins == N_BINS
 
-    assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)
+        assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)
 
 def test_load_bins():
     genes, bins = get_bins()
