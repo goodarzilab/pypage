@@ -31,6 +31,8 @@ class GeneOntology:
     -------
     get_gene_subset:
         returns a subset of the `bool_array` for the provided gene list
+    filter_pathways:
+        filters pathways based on membership
     """
     def __init__(
             self,
