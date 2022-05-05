@@ -2,8 +2,8 @@
 """
 
 
+import sys
 import numpy as np
-import pandas as pd
 from typing import Optional
 
 
@@ -14,12 +14,8 @@ class GeneOntology:
     ==========
     genes: np.ndarray
         the sorted list of genes found in the pathways
-    gene_indices: np.ndarray
-        a dictionary where keys are gene names and values are associated indices
     pathways: np.ndarray
         the sorted list of pathways found in the index
-    pathway_indices: np.ndarray
-        a dictionary where keys are pathway names and values are associated indices
     n_genes: int
         the number of genes found
     n_pathways: int
@@ -58,8 +54,8 @@ class GeneOntology:
             genes: np.ndarray):
         """load genes and associated indices
         """
-        self.gene_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(genes)))}
-        self.genes = np.array(list(self.gene_indices.keys()))
+        self._gene_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(genes)))}
+        self.genes = np.array(list(self._gene_indices.keys()))
         self.n_genes = self.genes.size
 
     def _load_pathways(
@@ -67,9 +63,15 @@ class GeneOntology:
             pathways: np.ndarray):
         """load pathways and associated indices
         """
-        self.pathway_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(pathways)))}
-        self.pathways = np.array(list(self.pathway_indices.keys()))
+        self._pathway_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(pathways)))}
+        self.pathways = np.array(list(self._pathway_indices.keys()))
         self.n_pathways = self.pathways.size
+
+    def _calculate_pathway_sizes(self):
+        """calculates and sets pathway sizes
+        """
+        self.pathway_sizes = self.bool_array.sum(axis=1)
+        self.avg_p_size = self.pathway_sizes.mean()
 
     def _build_bool_array(
             self,
@@ -79,10 +81,13 @@ class GeneOntology:
         """
         self.bool_array = np.zeros((self.n_pathways, self.n_genes), dtype=int)
         for g, p in zip(genes, pathways):
-            self.bool_array[self.pathway_indices[p]][self.gene_indices[g]] += 1
+            self.bool_array[self._pathway_indices[p]][self._gene_indices[g]] += 1
 
-        self.pathway_sizes = self.bool_array.sum(axis=1)
-        self.avg_p_size = self.pathway_sizes.mean()
+        self._calculate_pathway_sizes()
+
+        # these may change with filtering so better to remove them
+        del self._pathway_indices
+        del self._gene_indices
 
     def get_gene_subset(
             self,
@@ -103,6 +108,43 @@ class GeneOntology:
         """
         mask = np.isin(self.genes, gene_subset)
         return self.bool_array[:, mask]
+
+    def filter_pathways(
+            self,
+            min_size: Optional[int] = None,
+            max_size: Optional[int] = None):
+        """
+        Filters pathways to those within a specified range
+
+        Parameters
+        ----------
+        min_size: Optional[int]
+            the minimum size of the pathways, defaults to 0
+        max_size: Optional[int]
+            the maximum size of the pathways, default to current maximum
+        """
+        if not min_size and not max_size:
+            print("No minimum or maximum size provided. Doing nothing.", file=sys.stderr)
+            return 
+        if not min_size:
+            min_size = 0
+        if not max_size:
+            max_size = np.max(self.pathway_sizes)
+        
+        # determine pathway-level mask
+        p_mask = (self.pathway_sizes >= min_size) & (self.pathway_sizes <= max_size)
+        
+        # filter pathways
+        self.bool_array = self.bool_array[p_mask]
+        self.pathway_sizes = self.pathway_sizes[p_mask]
+        self.pathways = self.pathways[p_mask]
+
+        # determine gene level mask
+        g_mask = self.bool_array.sum(axis=0) != 0
+        
+        # filter genes with no pathways
+        self.bool_array = self.bool_array[:, g_mask]
+        self.genes = self.genes[g_mask]
     
     def __repr__(self) -> str:
         """
