@@ -35,8 +35,10 @@ def load_ontology():
 
 
 def test_run(load_expression, load_ontology):
-    p = PAGE(n_shuffle=5, k=2)
-    results = p.run(
-            load_expression,
-            load_ontology)
+    p = PAGE(
+        load_expression, 
+        load_ontology, 
+        n_shuffle=5, 
+        k=2)
+    results = p.run()
 
