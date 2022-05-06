@@ -36,6 +36,8 @@ class PAGE:
     """
     def __init__(
             self,
+            expression: ExpressionProfile,
+            ontology: GeneOntology,
             n_shuffle: int = 1e4,
             alpha: float = 5e-3,
             k: int = 20,
@@ -48,6 +50,11 @@ class PAGE:
         
         Parameters
         ----------
+        expression: ExpressionProfile
+            The provided `ExpressionProfile`
+
+        ontology: GeneOntology
+            the provided `GeneOntology`
         
         n_shuffle: int
             the number of performed permutation tests 
@@ -82,6 +89,9 @@ class PAGE:
             (`default = all available cores`)
         """
 
+        self.expression = expression
+        self.ontology = ontology
+
         self.n_shuffle = int(n_shuffle)
         self.alpha = float(alpha)
         self.k = int(k)
@@ -90,6 +100,10 @@ class PAGE:
         self.filter_redundant = filter_redundant
         self.n_jobs = n_jobs
         self._set_jobs()
+
+        self._intersect_genes()
+        self._subset_matrices()
+        self._set_sizes()
 
     def _set_jobs(self):
         """Sets the number of available jobs for numba parallel
@@ -101,123 +115,101 @@ class PAGE:
             # default to using all available threads
             nb.set_num_threads(nb.config.NUMBA_NUM_THREADS)
 
-    def _intersect_genes(
-            self, 
-            exp: ExpressionProfile,
-            ont: GeneOntology) -> np.ndarray:
+    def _intersect_genes(self):
         """Intersects to genes found in both sets
         """
-        shared_genes = np.sort(np.intersect1d(exp.genes, ont.genes))
-        return shared_genes
+        self.shared_genes = np.sort(np.intersect1d(
+            self.expression.genes, 
+            self.ontology.genes))
 
-    def _subset_matrices(
-            self,
-            exp: ExpressionProfile,
-            ont: GeneOntology,
-            ix: np.ndarray) -> (np.ndarray, np.ndarray):
+    def _subset_matrices(self):
         """Subsets the bool arrays to the gene intersection
         """
-        exp_bins = exp.get_gene_subset(ix)
-        ont_bool = ont.get_gene_subset(ix)
-        return exp_bins, ont_bool
+        self.exp_bins = self.expression.get_gene_subset(self.shared_genes)
+        self.ont_bool = self.ontology.get_gene_subset(self.shared_genes)
 
-    def _calculate_mutual_information(
-            self,
-            exp_bins: np.ndarray,
-            ont_bool: np.ndarray,
-            x_bins: int,
-            y_bins: int) -> np.ndarray:
+    def _set_sizes(self):
+        """Sets the number of bins for the expression and ontology
+        as well as the number of pathways found
+        """
+        self.x_bins = self.exp_bins.max() + 1
+        self.y_bins = self.ont_bool.max() + 1
+        self.num_pathways = self.ont_bool.shape[0]
+
+    def _calculate_mutual_information(self) -> np.ndarray:
         """Calculates the mutual information for each pathway
         """
-        num_pathways = ont_bool.shape[0]
-        information = np.zeros(num_pathways)
-        for idx in tqdm(range(num_pathways), desc="calculating mutual information"):
+        information = np.zeros(self.num_pathways)
+        pbar = tqdm(range(self.num_pathways), desc="calculating mutual information")
+        for idx in pbar:
             information[idx] = mutual_information(
-                    exp_bins, 
-                    ont_bool[idx], 
-                    x_bins, 
-                    y_bins, 
+                    self.exp_bins, 
+                    self.ont_bool[idx], 
+                    self.x_bins, 
+                    self.y_bins, 
                     base=self.base)
         return information
 
-    def _significance_testing(
-            self,
-            indices: np.ndarray,
-            exp_bins: np.ndarray,
-            ont_bool: np.ndarray,
-            x_bins: int,
-            y_bins: int):
+    def _significance_testing(self) -> (np.ndarray, np.ndarray):
         """
         Iterates through informative pathways to calculate hypergeometric pvalues
         """
-        overrep_pvals = np.zeros((x_bins, indices.size))
+        overrep_pvals = np.zeros((self.x_bins, self.pathway_indices.size))
         underrep_pvals = np.zeros_like(overrep_pvals)
 
-        pbar = tqdm(enumerate(indices), desc="hypergeometric tests")
+        pbar = tqdm(enumerate(self.pathway_indices), desc="hypergeometric tests")
         for idx, info_idx in pbar:
             pvals = hypergeometric_test(
-                    exp_bins, 
-                    ont_bool[info_idx])
+                    self.exp_bins, 
+                    self.ont_bool[info_idx])
             overrep_pvals[:, idx] = pvals[0]
             underrep_pvals[:, idx] = pvals[1]
 
         return overrep_pvals, underrep_pvals
 
-    def _gather_results(
-            self,
-            exp: ExpressionProfile,
-            ont: GeneOntology,
-            info: np.ndarray,
-            over_pvals: np.ndarray,
-            under_pvals: np.ndarray) -> pd.DataFrame:
+    def _gather_results(self) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
         """
         results = []
-        for info_idx, path_idx in enumerate(info):
-            for bin_idx in range(over_pvals.shape[0]):
+        for info_idx, path_idx in enumerate(self.pathway_indices):
+            for bin_idx in range(self.overrep_pvals.shape[0]):
                 results.append({
-                    "bin": exp.bins[bin_idx],
-                    "pathway": ont.pathways[path_idx],
-                    "over_pval": over_pvals[bin_idx, info_idx],
-                    "under_pval": under_pvals[bin_idx, info_idx]})
+                    "bin": self.expression.bins[bin_idx],
+                    "pathway": self.ontology.pathways[path_idx],
+                    "over_pval": self.overrep_pvals[bin_idx, info_idx],
+                    "under_pval": self.underrep_pvals[bin_idx, info_idx]})
 
         results = pd.DataFrame(results)
-        results["sign"] = results.apply(lambda x: 1 if x.over_pval < x.under_pval else -1, axis=1)
+        results["sign"] = results.apply(lambda x: 1 if x.over_pval< x.under_pval else -1, axis=1)
         results["pvalue"] = results.apply(lambda x: np.min([x.over_pval, x.under_pval]), axis=1)
         results["adj_pval"] = benjamini_hochberg(results.pvalue)
         results["nlp"] = -np.log10(results.adj_pval + np.min(results.adj_pval[results.adj_pval > 0]))
         results["snlp"] = results.sign * results.nlp
         return results
 
-    def _calculate_informative(
-            self,
-            information: np.ndarray,
-            exp_bins: np.ndarray,
-            ont_bool: np.ndarray,
-            x_bins: np.ndarray,
-            y_bins: np.ndarray) -> (np.ndarray, np.ndarray):
+    def _calculate_informative(self) -> (np.ndarray, np.ndarray):
         """Calculates the informative categories
         """
         n_break = 0
-        informative = np.zeros_like(information)
-        pvalues = np.zeros_like(information)
+        informative = np.zeros_like(self.information)
+        pvalues = np.zeros_like(self.information)
 
         # iterate through most informative pathways
-        pbar = tqdm(np.argsort(information)[::-1], desc="permutation testing")
+        pbar = tqdm(np.argsort(self.information)[::-1], desc="permutation testing")
         for idx in pbar:
             
             # calculate mutual information of random permutations
             permutations = calculate_mi_permutations(
-                    exp_bins,
-                    ont_bool[idx],
-                    x_bins,
-                    y_bins,
+                    self.exp_bins,
+                    self.ont_bool[idx],
+                    self.x_bins,
+                    self.y_bins,
                     n=self.n_shuffle)
             
             # calculate empirical pvalue against randomization
             pval = empirical_pvalue(
                     permutations, 
-                    information[idx])
+                    self.information[idx])
 
             if pval > self.alpha:
                 n_break += 1
@@ -229,21 +221,14 @@ class PAGE:
 
         return (informative, pvalues)
 
-    def _consolidate_pathways(
-            self,
-            informative: np.ndarray,
-            pvalues: np.ndarray,
-            exp_bins: np.ndarray,
-            ont_bool: np.ndarray,
-            x_bins: int,
-            y_bins: int) -> np.ndarray:
+    def _consolidate_pathways(self) -> np.ndarray:
         """Consolidate redundant pathways
         """
         existing = []
-        inf_idx = np.flatnonzero(informative)
+        inf_idx = np.flatnonzero(self.informative)
 
         # iterate through pvalues in ascending order
-        pbar = tqdm(np.argsort(pvalues), desc="consolidating redundant pathways")
+        pbar = tqdm(np.argsort(self.pvalues), desc="consolidating redundant pathways")
         for idx in pbar:
 
             # skip indices that are not informative
@@ -261,12 +246,12 @@ class PAGE:
             # calculate redundancy
             for i, e in enumerate(existing):
                 all_ri[i] = measure_redundancy(
-                        exp_bins, 
-                        ont_bool[idx], 
-                        ont_bool[e], 
-                        x_bins, 
-                        y_bins, 
-                        y_bins)
+                        self.exp_bins, 
+                        self.ont_bool[idx], 
+                        self.ont_bool[e], 
+                        self.x_bins, 
+                        self.y_bins, 
+                        self.y_bins)
 
 
             # accept if informative above all existing accepted pathways
@@ -277,19 +262,9 @@ class PAGE:
         
         return np.array(existing)
 
-    def run(
-            self,
-            exp: ExpressionProfile,
-            ont: GeneOntology) -> pd.DataFrame:
+    def run(self) -> pd.DataFrame:
         """
         Perform the PAGE algorithm
-
-        Parameters
-        ==========
-        exp: ExpressionProfile
-            The ExpressionProfile to consider in the analysis
-        ont: GeneOntology
-            the GeneOntology to consider in the analysis
 
         Returns
         =======
@@ -298,55 +273,24 @@ class PAGE:
 
         Examples
         ========
-        >>> p = PAGE()
-        >>> p.run(exp, ont)
+        >>> p = PAGE(exp, ont)
+        >>> p.run()
         """
-        shared_genes = self._intersect_genes(exp, ont)
-        exp_bins, ont_bool = self._subset_matrices(exp, ont, shared_genes)
-
-        x_bins = exp_bins.max() + 1
-        y_bins = 2
 
         # calculate mutual information
-        information = self._calculate_mutual_information(
-                exp_bins,
-                ont_bool,
-                x_bins,
-                y_bins)
+        self.information = self._calculate_mutual_information()
         
         # select informative pathways
-        informative, pvalues = self._calculate_informative(
-                information, 
-                exp_bins, 
-                ont_bool, 
-                x_bins,
-                y_bins)
+        self.informative, self.pvalues = self._calculate_informative()
 
         # filter redundant pathways
         if self.filter_redundant:
-            pathway_indices = self._consolidate_pathways(
-                    informative,
-                    pvalues,
-                    exp_bins,
-                    ont_bool,
-                    x_bins,
-                    y_bins)
+            self.pathway_indices = self._consolidate_pathways()
         else:
-            pathway_indices = np.flatnonzero(informative)
+            self.pathway_indices = np.flatnonzero(self.informative)
 
         # hypergeometric testing over selected pathways
-        overrep_pvals, underrep_pvals = self._significance_testing(
-                pathway_indices,
-                exp_bins,
-                ont_bool,
-                x_bins,
-                y_bins)
+        self.overrep_pvals, self.underrep_pvals = self._significance_testing()
 
-        results = self._gather_results(
-                exp,
-                ont,
-                pathway_indices,
-                overrep_pvals,
-                underrep_pvals)
-
-        return results
+        self.results = self._gather_results()
+        return self.results
