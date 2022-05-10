@@ -30,6 +30,59 @@ class PAGE:
     run:
         Perform the PAGE algorithm on the provided data
 
+    Attributes
+    ----------
+    expression: ExpressionProfile
+        the provided expression profile
+    ontology: GeneOntology
+        the provided ontology
+    shared_genes: np.ndarray
+        the shared genes between the `ExpressionProfile` and `GeneOntology`
+    exp_bins: np.ndarray
+        the expression bins for the intersection of `shared_genes`.
+        of shape (`shared_genes`.size, )
+    ont_bool: np.ndarray
+        the ontology bins for the intersection of `shared_genes`. 
+        of shape (`num_pathways`, `shared_genes`.size)
+    x_bins: int
+        the number of expression bins in `exp_bins`
+    y_bins: int
+        the number of expression bins in `ont_bool`
+    num_pathways: int
+        the number of pathways in `ontology`
+    information: np.ndarray
+        the calculated mutual information for each pathway.
+        of shape (`num_pathways`, )
+    informative: np.ndarray
+        a `bool` array representing whether that pathway was considered informative. 
+        of shape (`num_pathways`, )
+    n_shuffle: int
+        the number of performed permutation tests 
+        (`default = 1e4`)
+    alpha: float
+        the maximum p-value threshold to consider a pathway informative
+        with respect to the permuted mutual information distribution 
+        (`default = 5e-3`)
+    k: int
+        the number of contiguous uninformative pathways to consider before
+        stopping the informative pathway search
+        (`default = 20`)
+    r: float
+        the ratio of the conditional mutual information of a new accepted
+        pathway against the mutual information of that pathway against
+        all other accepted pathways. Only active when filter_redundant == True.
+        (`default = 5.0`)
+    base: int
+        the base of the logarithm used when calculating entropy
+        (`default = 2`)
+    filter_redundant: bool
+        whether to perform the pathway redundancy search
+        (`default = True`)
+    n_jobs: int
+        The number of parallel jobs to use in the analysis
+        (`default = all available cores`)
+
+
     Notes
     =====
     .. [1] H. Goodarzi, O. Elemento, S. Tavazoie, "Revealing Global Regulatory Perturbations across Human Cancers." https://doi.org/10.1016/j.molcel.2009.11.016
@@ -192,7 +245,7 @@ class PAGE:
         """
         n_break = 0
         informative = np.zeros_like(self.information)
-        pvalues = np.zeros_like(self.information)
+        pvalues = np.ones_like(self.information)
 
         # iterate through most informative pathways
         pbar = tqdm(np.argsort(self.information)[::-1], desc="permutation testing")
@@ -207,11 +260,11 @@ class PAGE:
                     n=self.n_shuffle)
             
             # calculate empirical pvalue against randomization
-            pval = empirical_pvalue(
+            pvalues[idx] = empirical_pvalue(
                     permutations, 
                     self.information[idx])
 
-            if pval > self.alpha:
+            if pvalues[idx] > self.alpha:
                 n_break += 1
                 if n_break == self.k:
                     break
