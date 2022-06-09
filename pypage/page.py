@@ -268,19 +268,30 @@ class PAGE:
         # iterate through most informative pathways
         pbar = tqdm(np.argsort(self.information)[::-1], desc="permutation testing")
         for idx in pbar:
-            
+
             # calculate mutual information of random permutations
-            permutations = calculate_mi_permutations(
+            if self.function == 'mi':
+                permutations = calculate_mi_permutations(
                     self.exp_bins,
                     self.ont_bool[idx],
                     self.x_bins,
                     self.y_bins,
                     n=self.n_shuffle)
-            
+            else:
+                permutations = calculate_cmi_permutations(
+                    self.exp_bins,
+                    self.ont_bool[idx],
+                    self.membership_bins,
+                    self.x_bins,
+                    self.y_bins,
+                    self.z_bins,
+                    n=self.n_shuffle)
+
             # calculate empirical pvalue against randomization
+
             pvalues[idx] = empirical_pvalue(
-                    permutations, 
-                    self.information[idx])
+                permutations,
+                self.information[idx])
 
             if pvalues[idx] > self.alpha:
                 n_break += 1
