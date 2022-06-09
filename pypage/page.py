@@ -191,17 +191,31 @@ class PAGE:
         self.z_bins = self.membership_bins.max() + 1
         self.num_pathways = self.ont_bool.shape[0]
 
-    def _calculate_mutual_information(self) -> np.ndarray:
-        """Calculates the mutual information for each pathway
+    def _calculate_information(self) -> np.ndarray:
+        """Calculates mutual or conditional mutual information for each pathway
         """
         information = np.zeros(self.num_pathways)
-        pbar = tqdm(range(self.num_pathways), desc="calculating mutual information")
+        if self.function == 'mi':
+            desc = "calculating mutual information"
+        else:
+            desc = "calculating conditional mutual information"
+        pbar = tqdm(range(self.num_pathways), desc=desc)
         for idx in pbar:
-            information[idx] = mutual_information(
+            if self.function == 'mi':
+                information[idx] = mutual_information(
                     self.exp_bins,
                     self.ont_bool[idx],
                     self.x_bins,
                     self.y_bins,
+                    base=self.base)
+            else:
+                information[idx] = conditional_mutual_information(
+                    self.exp_bins,
+                    self.ont_bool[idx],
+                    self.membership_bins,
+                    self.x_bins,
+                    self.y_bins,
+                    self.z_bins,
                     base=self.base)
         return information
 
@@ -333,7 +347,7 @@ class PAGE:
         """
 
         # calculate mutual information
-        self.information = self._calculate_mutual_information()
+        self.information = self._calculate_information()
         
         # select informative pathways
         self.informative, self.pvalues = self._calculate_informative()
