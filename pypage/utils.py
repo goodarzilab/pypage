@@ -121,7 +121,7 @@ def hypergeometric_test(
     hg = hypergeom(M, n, N)
     
     # measure overrepresentation
-    sf = hg.sf(k)
+    sf = hg.sf(k-1)
     
     # measure underrepresentation
     cdf = hg.cdf(k)
