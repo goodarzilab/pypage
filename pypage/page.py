@@ -238,26 +238,6 @@ class PAGE:
 
         return overrep_pvals, underrep_pvals
 
-    def _gather_results(self) -> pd.DataFrame:
-        """Gathers the results from the experiment into a single dataframe
-        """
-        results = []
-        for info_idx, path_idx in enumerate(self.pathway_indices):
-            for bin_idx in range(self.overrep_pvals.shape[0]):
-                results.append({
-                    "bin": self.expression.bins[bin_idx],
-                    "pathway": self.ontology.pathways[path_idx],
-                    "over_pval": self.overrep_pvals[bin_idx, info_idx],
-                    "under_pval": self.underrep_pvals[bin_idx, info_idx]})
-
-        results = pd.DataFrame(results)
-        results["sign"] = results.apply(lambda x: 1 if x.over_pval< x.under_pval else -1, axis=1)
-        results["pvalue"] = results.apply(lambda x: np.min([x.over_pval, x.under_pval]), axis=1)
-        results["adj_pval"] = benjamini_hochberg(results.pvalue)
-        results["nlp"] = -np.log10(results.adj_pval + np.min(results.adj_pval[results.adj_pval > 0]))
-        results["snlp"] = results.sign * results.nlp
-        return results
-
     def _calculate_informative(self) -> (np.ndarray, np.ndarray):
         """Calculates the informative categories
         """
@@ -342,6 +322,23 @@ class PAGE:
                 pass
 
         return np.array(existing)
+
+    def _gather_results(self) -> pd.DataFrame:
+        """Gathers the results from the experiment into a single dataframe
+        """
+        # estimate sign
+        self.log_overrep_pvals = np.log10(self.overrep_pvals)
+        self.log_underrep_pvals = np.log10(self.underrep_pvals)
+        self.graphical_ar = np.minimum(self.log_overrep_pvals, self.log_underrep_pvals)
+        self.graphical_ar[self.log_overrep_pvals < self.log_underrep_pvals] *= -1  # make overrepresented positive
+        n_bins = self.graphical_ar.shape[1]
+        sign = self.graphical_ar[:, :n_bins // 2].sum(1) <= self.graphical_ar[:, n_bins // 2:].sum(1)
+        results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
+                                "CMI": self.information[self.pathway_indices],
+                                "p-value": self.pvalues[self.pathway_indices],
+                                "Regulation pattern": sign}
+                               )
+        return results
 
     def run(self) -> pd.DataFrame:
         """
