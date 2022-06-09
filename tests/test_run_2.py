@@ -39,4 +39,4 @@ def test_run(load_expression, load_ontology):
     results, hm = p.run()
     # print(results)
     hm.convert_from_to('gs', 'ensg', 'human')
-    hm.save('test_heatmap', isreg=True)
+    hm.save('test_heatmap', show_reg=True)
