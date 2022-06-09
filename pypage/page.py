@@ -373,4 +373,4 @@ class PAGE:
             self.results = self._gather_results()
             return self.results
         else:
-            return None
+            return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"])
