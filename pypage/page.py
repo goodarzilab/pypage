@@ -366,9 +366,11 @@ class PAGE:
             self.pathway_indices = self._consolidate_pathways()
         else:
             self.pathway_indices = np.flatnonzero(self.informative)
+        if len(self.pathway_indices) != 0:
+            # hypergeometric testing over selected pathways
+            self.overrep_pvals, self.underrep_pvals = self._significance_testing()
 
-        # hypergeometric testing over selected pathways
-        self.overrep_pvals, self.underrep_pvals = self._significance_testing()
-
-        self.results = self._gather_results()
-        return self.results
+            self.results = self._gather_results()
+            return self.results
+        else:
+            return None
