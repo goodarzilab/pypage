@@ -5,6 +5,7 @@
 import numpy as np
 import pandas as pd
 from typing import Optional
+from .accession_types import change_accessions
 
 
 class ExpressionProfile:
@@ -31,7 +32,7 @@ class ExpressionProfile:
     bin_sizes: np.ndarray
         a (n_bins, ) array where each value represents the number of genes in that bin index
     bin_ranges: Optional[np.ndarray]
-        a (n_bins, ) array describing the ranges of the scores for each bin. only present if `is_bin` is True 
+        a (n_bins, ) array describing the ranges of the scores for each bin. only present if `is_bin` is True
 
     Methods
     -------
@@ -54,12 +55,12 @@ class ExpressionProfile:
             The array representing either the continuous expression value
             of a specific gene, or the bin/cluster that gene belongs to.
         is_bin: bool
-            whether the provided dataframe is prebinned. 
+            whether the provided dataframe is prebinned.
         bin_strategy: str
             the method to bin expression, choices are ['hist', 'split'].
             'hist' will create a histogram with `n_bins` which will group
-            genes of similar counts more closely together but with unequal bin sizes. 
-            'split' will create bins of equivalent sizes. 
+            genes of similar counts more closely together but with unequal bin sizes.
+            'split' will create bins of equivalent sizes.
             default = 'hist'
         n_bins: int
         """
@@ -68,6 +69,7 @@ class ExpressionProfile:
         self._set_bin_strategy(bin_strategy)
 
         self._load_genes(x)
+        self.raw_expression = np.array(y)
         bins = self._load_expression(y, n_bins)
         self._build_bool_array(x, bins)
         self._build_bin_array()
@@ -78,11 +80,11 @@ class ExpressionProfile:
             y: np.ndarray):
         """validates inputs are as expected
         """
-        assert x.size > 0,\
+        assert x.size > 0, \
             "provided array must not be empty"
-        assert x.size == y.size,\
+        assert x.size == y.size, \
             "genes and expression/bin arrays must be equal sized"
-        assert x.shape == y.shape,\
+        assert x.shape == y.shape, \
             "genes and expression/bin arrays must be equally shaped"
 
     def _set_bin_strategy(
@@ -94,7 +96,7 @@ class ExpressionProfile:
         if not bin_strategy:
             self._bin_strategy = "hist"
         else:
-            assert bin_strategy in known_strategy,\
+            assert bin_strategy in known_strategy, \
                 f"unknown bin strategy: `{bin_strategy}`. Known strategies : {', '.join(known_strategy)}"
             self._bin_strategy = bin_strategy
 
@@ -108,7 +110,7 @@ class ExpressionProfile:
         self.n_genes = self.genes.size
 
     def _load_expression(
-            self, 
+            self,
             expression: np.ndarray,
             n_bins: Optional[int]) -> np.ndarray:
         """loads the expression/bin data from the dataframe
@@ -120,7 +122,7 @@ class ExpressionProfile:
             if not n_bins:
                 self.n_bins = 10
             else:
-                assert n_bins > 1,\
+                assert n_bins > 1, \
                     "number of bins must be greater than 1"
                 self.n_bins = n_bins
             bins = self._build_bin_indices(expression)
@@ -144,7 +146,7 @@ class ExpressionProfile:
         """converts expression data to binned data using histogram method
         """
         self.bin_sizes, self.bin_ranges = np.histogram(expression, bins=self.n_bins)
-        self.bin_ranges[-1] += epsilon # added because digitize is not inclusive at maximum 
+        self.bin_ranges[-1] += epsilon # added because digitize is not inclusive at maximum
         return np.digitize(expression, self.bin_ranges)
 
     def _build_bin_split(
@@ -160,7 +162,7 @@ class ExpressionProfile:
         self.bin_sizes = np.zeros(self.n_bins, dtype=int)
         self.bin_ranges = np.zeros(self.n_bins)
         self.bin_ranges[-1] = expression.max()
-        
+
         for i in np.arange(0, self.n_bins):
             lower_bound = expression[argidx[bin_size * i]]
 
@@ -177,9 +179,9 @@ class ExpressionProfile:
             bin_identities[mask] = i
 
         return bin_identities
-        
+
     def _load_bins(
-            self, 
+            self,
             bins: np.ndarray) -> np.ndarray:
         """loads the bin data from an array
         """
@@ -215,9 +217,9 @@ class ExpressionProfile:
             self,
             gene_subset: np.ndarray) -> np.ndarray:
         """
-        Index the bin-array for the required gene subset. 
+        Index the bin-array for the required gene subset.
         Expects the subset to be sorted
-        
+
         Parameters
         ==========
         gene_subset: np.ndarray
