@@ -310,7 +310,7 @@ class PAGE:
         inf_idx = np.flatnonzero(self.informative)
 
         # iterate through pvalues in ascending order
-        pbar = tqdm(np.argsort(self.pvalues), desc="consolidating redundant pathways")
+        pbar = tqdm(np.argsort(self.information)[::-1], desc="consolidating redundant pathways")
         for idx in pbar:
 
             # skip indices that are not informative
@@ -321,27 +321,26 @@ class PAGE:
             if len(existing) == 0:
                 existing.append(idx)
                 continue
-            
+
             # initialize reduncancy information array
             all_ri = np.zeros(len(existing))
 
             # calculate redundancy
             for i, e in enumerate(existing):
                 all_ri[i] = measure_redundancy(
-                        self.exp_bins, 
-                        self.ont_bool[idx], 
-                        self.ont_bool[e], 
-                        self.x_bins, 
-                        self.y_bins, 
-                        self.y_bins)
-
+                    self.exp_bins,
+                    self.ont_bool[idx],
+                    self.ont_bool[e],
+                    self.x_bins,
+                    self.y_bins,
+                    self.y_bins)
 
             # accept if informative above all existing accepted pathways
-            if np.all(all_ri >= self.r):
+            if all_ri[i] < self.redundancy_ratio:
                 existing.append(idx)
             else:
                 pass
-        
+
         return np.array(existing)
 
     def run(self) -> pd.DataFrame:
