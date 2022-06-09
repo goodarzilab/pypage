@@ -5,6 +5,8 @@
 import sys
 import numpy as np
 from typing import Optional
+from .accession_types import change_accessions
+import gzip
 
 
 class GeneOntology:
@@ -26,6 +28,12 @@ class GeneOntology:
         a (n_pathways, ) array where each value represents the number of genes in that pathway index
     avg_p_size: float
         the mean number of genes across pathways
+    membership: np.ndarray
+        array representing the membership of each gene in an annotation
+    n_bins: int
+        number of bins to use when binning membership array
+    bin_array: np.ndarray
+        binned membership array
 
     Methods
     -------
@@ -36,9 +44,11 @@ class GeneOntology:
     """
     def __init__(
             self,
-            genes: np.ndarray,
-            pathways: np.ndarray,
-            n_bins: Optional[int] = 3):
+            genes: Optional[np.ndarray] = None,
+            pathways: Optional[np.ndarray] = None,
+            ann_file: Optional[str] = None,
+            n_bins: Optional[int] = 3,
+            first_col_is_genes: Optional[bool] = False):
         """
         Parameters
         ==========
@@ -47,28 +57,98 @@ class GeneOntology:
         pathways: np.ndarray
             an array associated pathways
         """
+        if ann_file:
+            self._read_annotation_file(ann_file, first_col_is_genes)
+        else:
+            self._validate_inputs(genes, pathways)
+            self._load_genes(genes)
+            self._load_pathways(pathways)
+            self._build_bool_array(genes, pathways)
 
-        self._validate_inputs(genes, pathways)
-        self._load_genes(genes)
-        self._load_pathways(pathways)
-        self._build_bool_array(genes, pathways)
         self._make_membership_profile(n_bins)
-    
+
+    def _read_annotation_file(self,
+                              ann_file: str,
+                              first_col_is_genes: Optional[bool] = False):
+        """
+         Reads annotation files which are in a descriptive format,
+         i.e, "Gene1 Pathway1 Pathway2..." or "Pathway1 Gene1 Gene2..."
+
+         Parameters
+         ----------
+         ann_file
+             a file name of the annotation
+         first_is_gene
+             a parameter which specifies whether a gene is
+         Returns
+         -------
+         pd.DataFrame
+             a dataframe in a long format
+         """
+        if ann_file[-2:] == 'gz':
+            f = gzip.open(ann_file, 'r')
+        else:
+            f = open(ann_file)
+
+        row_names = []
+        column_names = set()
+        for line in f:
+            if ann_file[-2:] == 'gz':
+                line = line.decode('ASCII')
+            els = line.rstrip().split('\t')
+            row_names.append(els[0])
+            els.pop(0)
+            if 'http://' in els[0]:
+                els.pop(0)
+            column_names |= set(els)
+        column_names = list(column_names)
+
+        positions = dict(zip(column_names, np.arange(len(column_names))))
+        db_profiles = np.zeros((len(row_names), len(column_names)), dtype=int)
+
+        if ann_file[-2:] == 'gz':
+            f = gzip.open(ann_file, 'r')
+        else:
+            f = open(ann_file)
+
+        i = 0
+        for line in open(ann_file):
+            if ann_file[-2:] == 'gz':
+                line = line.decode('ASCII')
+            els = line.rstrip().split('\t')[1:]
+            if 'http://' in els[0]:
+                els.pop(0)
+            indices = [positions[el] for el in els]
+            db_profiles[i, indices] = 1
+            i += 1
+
+        if first_col_is_genes:
+            db_profiles = db_profiles.T
+            db_genes = row_names
+            db_names = column_names
+        else:
+            db_genes = column_names
+            db_names = row_names
+        self.pathways = np.array(db_names)
+        self.genes = np.array(db_genes)
+        self.bool_array = db_profiles
+        self.n_genes = len(self.genes)
+
     def _validate_inputs(
             self,
             x: np.ndarray,
             y: np.ndarray):
         """validates inputs are as expected
         """
-        assert x.size > 0,\
+        assert x.size > 0, \
             "provided array must not be empty"
-        assert x.size == y.size,\
+        assert x.size == y.size, \
             "genes and pathway arrays must be equal sized"
-        assert x.shape == y.shape,\
+        assert x.shape == y.shape, \
             "genes and pathway arrays must be equally shaped"
 
     def _load_genes(
-            self, 
+            self,
             genes: np.ndarray):
         """load genes and associated indices
         """
@@ -77,7 +157,7 @@ class GeneOntology:
         self.n_genes = self.genes.size
 
     def _load_pathways(
-            self, 
+            self,
             pathways: np.ndarray):
         """load pathways and associated indices
         """
@@ -150,9 +230,9 @@ class GeneOntology:
             self,
             gene_subset: np.ndarray) -> np.ndarray:
         """
-        Index the bool-array for the required gene subset. 
+        Index the bool-array for the required gene subset.
         Expects the subset to be sorted
-        
+
         Parameters
         ==========
         gene_subset: np.ndarray
@@ -202,17 +282,17 @@ class GeneOntology:
         """
         if not min_size and not max_size:
             print("No minimum or maximum size provided. Doing nothing.", file=sys.stderr)
-            return 
+            return
         if not min_size:
             min_size = 0
         if not max_size:
             max_size = np.max(self.pathway_sizes)
         assert min_size >= 0, "Provided minimum must be >= 0"
         assert max_size > min_size, f"Provided maximum must be > min_size: {min_size}"
-        
+
         # determine pathway-level mask
         p_mask = (self.pathway_sizes >= min_size) & (self.pathway_sizes <= max_size)
-        
+
         # filter pathways
         self.bool_array = self.bool_array[p_mask]
         self.pathway_sizes = self.pathway_sizes[p_mask]
@@ -220,7 +300,7 @@ class GeneOntology:
 
         # determine gene level mask
         g_mask = self.bool_array.sum(axis=0) != 0
-        
+
         # filter genes with no pathways
         self.bool_array = self.bool_array[:, g_mask]
         self.genes = self.genes[g_mask]
@@ -246,7 +326,7 @@ class GeneOntology:
                                        input_format,
                                        output_format,
                                        species)
-    
+
     def __repr__(self) -> str:
         """
         """
