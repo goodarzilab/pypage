@@ -228,5 +228,6 @@ class ExpressionProfile:
         np.ndarray
             the bin_array subsetted to the indices of the `gene_subset`
         """
-        mask = np.isin(self.genes, gene_subset)
-        return self.bin_array[mask]
+
+        idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
+        return self.bin_array[idxs]

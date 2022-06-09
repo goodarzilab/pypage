@@ -122,8 +122,8 @@ class GeneOntology:
         np.ndarray
             the bool_array subsetted to the indices of the `gene_subset`
         """
-        mask = np.isin(self.genes, gene_subset)
-        return self.bool_array[:, mask]
+        idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
+        return self.bool_array[:, idxs]
 
     def filter_pathways(
             self,
