@@ -163,6 +163,28 @@ class GeneOntology:
         # filter genes with no pathways
         self.bool_array = self.bool_array[:, g_mask]
         self.genes = self.genes[g_mask]
+
+    def convert_from_to(self,
+                        input_format: str,
+                        output_format: str,
+                        species: Optional[str] = 'human'):
+        """
+        A function which changes accessions
+        Parameters
+        ----------
+        input_format
+            input accession type, takes 'enst', 'ensg', 'refseq', 'entrez', 'gs', 'ext'
+        output_format
+            output accession type, takes 'enst', 'ensg', 'refseq', 'entrez', 'gs', 'ext'
+        species
+            analyzed species, takes either 'human' or 'mouse'
+        """
+        if input_format in ['ensg', 'enst', 'refseq']:  # for ex., remove '.1' from 'ENSG00000128016.1'
+            self.genes = np.array([gene.split('.')[0] for gene in self.genes])
+        self.genes = change_accessions(self.genes,
+                                       input_format,
+                                       output_format,
+                                       species)
     
     def __repr__(self) -> str:
         """

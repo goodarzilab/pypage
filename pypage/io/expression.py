@@ -231,3 +231,25 @@ class ExpressionProfile:
 
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
         return self.bin_array[idxs]
+
+    def convert_from_to(self,
+                        input_format: str,
+                        output_format: str,
+                        species: Optional[str] = 'human'):
+        """
+        A function which changes accessions
+        Parameters
+        ----------
+        input_format
+            input accession type, takes 'enst', 'ensg', 'refseq', 'entrez', 'gs', 'ext'
+        output_format
+            output accession type, takes 'enst', 'ensg', 'refseq', 'entrez', 'gs', 'ext'
+        species
+            analyzed species, takes either 'human' or 'mouse'
+        """
+        if input_format in ['ensg', 'enst', 'refseq']:  # for ex., remove '.1' from 'ENSG00000128016.1'
+            self.genes = np.array([gene.split('.')[0] for gene in self.genes])
+        self.genes = change_accessions(self.genes,
+                                       input_format,
+                                       output_format,
+                                       species)
