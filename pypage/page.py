@@ -153,6 +153,7 @@ class PAGE:
         self.base = int(base)
         self.filter_redundant = filter_redundant
         self.n_jobs = n_jobs
+        self.function = function
         self._set_jobs()
 
         self._intersect_genes()
