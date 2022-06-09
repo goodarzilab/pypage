@@ -97,7 +97,8 @@ class PAGE:
             r: float = 5.,
             base: int = 2,
             filter_redundant: bool = True,
-            n_jobs: Optional[int] = None):
+            n_jobs: Optional[int] = None,
+            function: Optional[str] = 'cmi'):
         """
         Initialize object
         
