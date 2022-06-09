@@ -180,6 +180,7 @@ class PAGE:
         """
         self.exp_bins = self.expression.get_gene_subset(self.shared_genes)
         self.ont_bool = self.ontology.get_gene_subset(self.shared_genes)
+        self.membership_bins = self.ontology.get_membership_subset(self.shared_genes)
 
     def _set_sizes(self):
         """Sets the number of bins for the expression and ontology
@@ -187,6 +188,7 @@ class PAGE:
         """
         self.x_bins = self.exp_bins.max() + 1
         self.y_bins = self.ont_bool.max() + 1
+        self.z_bins = self.membership_bins.max() + 1
         self.num_pathways = self.ont_bool.shape[0]
 
     def _calculate_mutual_information(self) -> np.ndarray:
@@ -196,10 +198,10 @@ class PAGE:
         pbar = tqdm(range(self.num_pathways), desc="calculating mutual information")
         for idx in pbar:
             information[idx] = mutual_information(
-                    self.exp_bins, 
-                    self.ont_bool[idx], 
-                    self.x_bins, 
-                    self.y_bins, 
+                    self.exp_bins,
+                    self.ont_bool[idx],
+                    self.x_bins,
+                    self.y_bins,
                     base=self.base)
         return information
 
