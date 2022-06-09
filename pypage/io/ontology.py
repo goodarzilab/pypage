@@ -37,7 +37,8 @@ class GeneOntology:
     def __init__(
             self,
             genes: np.ndarray,
-            pathways: np.ndarray):
+            pathways: np.ndarray,
+            n_bins: Optional[int] = 3):
         """
         Parameters
         ==========
@@ -51,6 +52,7 @@ class GeneOntology:
         self._load_genes(genes)
         self._load_pathways(pathways)
         self._build_bool_array(genes, pathways)
+        self._make_membership_profile(n_bins)
     
     def _validate_inputs(
             self,
@@ -105,6 +107,45 @@ class GeneOntology:
         del self._pathway_indices
         del self._gene_indices
 
+    def _build_bin_split(
+            self,
+            membership: np.ndarray,
+            n_bins: int) -> np.ndarray:
+        """converts membership array to binned data using equivlanet split method
+        """
+        argidx = np.argsort(membership)
+        max_size = membership.size
+        bin_size = int(max_size / n_bins)
+
+        bin_identities = np.zeros(max_size, dtype=int)
+        self.bin_sizes = np.zeros(n_bins, dtype=int)
+        self.bin_ranges = np.zeros(n_bins)
+        self.bin_ranges[-1] = membership.max()
+
+        for i in np.arange(0, n_bins):
+            lower_bound = membership[argidx[bin_size * i]]
+
+            if i < n_bins - 1:
+                upper_bound = membership[argidx[bin_size * (i + 1)]]
+                mask = (membership >= lower_bound) & (membership < upper_bound)
+
+            # put remaining into last bin
+            else:
+                mask = (membership >= lower_bound)
+
+            self.bin_sizes[i] = mask.sum()
+            self.bin_ranges[i] = lower_bound
+            bin_identities[mask] = i
+
+        return bin_identities
+
+    def _make_membership_profile(self,
+                                 n_bins) -> np.ndarray:
+        """create a gene membership array and then bin it"""
+        membership = self.bool_array.sum(0)
+        self.bin_array = self._build_bin_split(membership, n_bins)
+        return self.bin_array
+
     def get_gene_subset(
             self,
             gene_subset: np.ndarray) -> np.ndarray:
@@ -124,6 +165,26 @@ class GeneOntology:
         """
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
         return self.bool_array[:, idxs]
+
+    def get_membership_subset(
+            self,
+            gene_subset: np.ndarray) -> np.ndarray:
+        """
+        Index the bool-array for the required gene membership subset.
+        Expects the subset to be sorted
+
+        Parameters
+        ==========
+        gene_subset: np.ndarray
+            a list of genes to subset the bin_array to
+
+        Returns
+        =======
+        np.ndarray
+            the bool_array subsetted to the indices of the `gene_subset`
+        """
+        idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
+        return self.bin_array[idxs]
 
     def filter_pathways(
             self,
