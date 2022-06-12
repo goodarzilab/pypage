@@ -47,7 +47,7 @@ class GeneOntology:
             genes: Optional[np.ndarray] = None,
             pathways: Optional[np.ndarray] = None,
             ann_file: Optional[str] = None,
-            n_bins: Optional[int] = 3,
+            n_bins: Optional[int] = 6,
             first_col_is_genes: Optional[bool] = False):
         """
         Parameters
@@ -64,8 +64,8 @@ class GeneOntology:
             self._load_genes(genes)
             self._load_pathways(pathways)
             self._build_bool_array(genes, pathways)
-
-        self._make_membership_profile(n_bins)
+        self._make_membership_profile()
+        self.n_bins = n_bins
 
     def _read_annotation_file(self,
                               ann_file: str,
@@ -219,12 +219,9 @@ class GeneOntology:
 
         return bin_identities
 
-    def _make_membership_profile(self,
-                                 n_bins) -> np.ndarray:
-        """create a gene membership array and then bin it"""
-        membership = self.bool_array.sum(0)
-        self.bin_array = self._build_bin_split(membership, n_bins)
-        return self.bin_array
+    def _make_membership_profile(self) -> np.ndarray:
+        """create a gene membership array"""
+        self.membership = self.bool_array.sum(0)
 
     def get_gene_subset(
             self,
@@ -250,7 +247,7 @@ class GeneOntology:
             self,
             gene_subset: np.ndarray) -> np.ndarray:
         """
-        Index the bool-array for the required gene membership subset.
+        Index the bool-array for the required gene membership subset and bin it.
         Expects the subset to be sorted
 
         Parameters
@@ -264,7 +261,9 @@ class GeneOntology:
             the bool_array subsetted to the indices of the `gene_subset`
         """
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
-        return self.bin_array[idxs]
+        sub_membership = self.membership[idxs]
+        sub_membership_binned = self._build_bin_split(sub_membership, self.n_bins)
+        return sub_membership_binned
 
     def filter_pathways(
             self,
