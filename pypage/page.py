@@ -97,7 +97,7 @@ class PAGE:
             ontology: GeneOntology,
             n_shuffle: int = 1e4,
             alpha: float = 1e-2,
-            k: int = 20,
+            k: int = 7,
             r: float = 5.,
             base: int = 2,
             filter_redundant: bool = False,
