@@ -101,7 +101,7 @@ class PAGE:
             r: float = 5.,
             base: int = 2,
             filter_redundant: bool = False,
-            n_jobs: Optional[int] = None,
+            n_jobs: Optional[int] = 1,
             function: Optional[str] = 'cmi',
             redundancy_ratio: Optional[float] = 0.2):
         """
@@ -145,7 +145,7 @@ class PAGE:
 
         n_jobs: int
             The number of parallel jobs to use in the analysis
-            (`default = all available cores`)
+            (`default = 1`)
         """
 
         self.expression = expression
