@@ -70,7 +70,10 @@ class ExpressionProfile:
 
         self._load_genes(x)
         self.raw_expression = np.array(y)
-        self.n_bins = n_bins
+
+        bins = self._load_expression(y, n_bins)
+        self._build_bool_array(x, bins)
+        self._build_bin_array()
 
     def _validate_inputs(
             self,
@@ -230,13 +233,7 @@ class ExpressionProfile:
         """
 
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
-
-        sub_expression = self.raw_expression[idxs]
-        bins = self._load_expression(sub_expression, self.n_bins)
-        sub_genes = self.genes[idxs]
-        self._build_bool_array(sub_genes, bins)
-        self._build_bin_array()
-        return self.bin_array
+        return self.bin_array[idxs]
 
     def convert_from_to(self,
                         input_format: str,
