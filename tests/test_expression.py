@@ -92,6 +92,17 @@ def test_load_bins():
     assert exp.n_bins == N_BINS
 
 
+def test_subsetting():
+    for _ in np.arange(T):
+        genes, expression = get_expression()
+
+        exp = ExpressionProfile(genes, expression)
+        subset = genes[np.random.random(genes.size) < 0.5]
+
+        bin_sub = exp.get_gene_subset(subset)
+        assert bin_sub.size == subset.size
+
+
 def test_expression_conversion():
     df = pd.read_csv('example_data/bladder_refseq.tsv.gz',
                      sep="\t",
