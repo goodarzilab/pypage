@@ -17,4 +17,5 @@ setup(
        "pydata-sphinx-theme",
        "sphinx-autodoc-typehints",
        "pybiomart",
+       "matplotlib"
    ])
