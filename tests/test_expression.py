@@ -3,6 +3,7 @@
 
 
 import numpy as np
+import pandas as pd
 from pypage import ExpressionProfile
 
 
