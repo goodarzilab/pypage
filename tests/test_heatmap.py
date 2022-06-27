@@ -67,5 +67,5 @@ def test_heatmap():
 def test_heatmap_with_reg():
     hm = Heatmap(test_pathways, test_array)
     hm.add_gene_expression(test_pathways, test_reg_exp)
-    hm.show(isreg=True)
+    hm.show(show_reg=True)
 
