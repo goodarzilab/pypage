@@ -339,8 +339,8 @@ class PAGE:
                     self.overrep_pvals], axis=0)
 
         self._build_minimums()
-        self._build_graphical_array()
         self._build_sign()
+        self._build_graphical_array()
 
     def _build_minimums(self):
         """
@@ -348,21 +348,22 @@ class PAGE:
         """
         self.pval_minimums = self.pvals.min(axis=0)
 
+    def _build_sign(self):
+        """
+        Determines the sign of the p-value for each pathway and bin
+        -1 if underrepresented, 1 if overrepresented
+        """
+        self.sign = np.ones_like(self.pval_minimums)
+        self.sign[self.pvals.argmin(axis=0) != 0] = -1
+
     def _build_graphical_array(self):
         """
         Creates the graphical array of log_pvals
         This takes the minimum p-value between the underrepresented and overrepresented
         p-values for each bin then takes the log10.
         """
-        self.graphical_ar = np.log10(self.pvals.min(axis=0))
-        
-    def _build_sign(self):
-        """
-        Determines the sign of the p-value for each pathway and bin
-        -1 if underrepresented, 1 if overrepresented
-        """
-        self.sign = np.ones_like(self.graphical_ar)
-        self.sign[self.pvals.argmin(axis=0) == 0] = -1
+        self.graphical_ar = np.log10(self.pval_minimums)
+        self.graphical_ar *= self.sign
 
     def _gather_results(self, empty=False) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
