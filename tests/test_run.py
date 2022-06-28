@@ -34,6 +34,14 @@ def load_ontology():
             frame.iloc[:, 1])
 
 
+def test_init(load_expression, load_ontology):
+    p = PAGE(
+        load_expression,
+        load_ontology,
+        n_shuffle=5,
+        k=2)
+
+
 def test_run(load_expression, load_ontology):
     p = PAGE(
         load_expression, 
@@ -41,4 +49,37 @@ def test_run(load_expression, load_ontology):
         n_shuffle=5, 
         k=2)
     results = p.run()
+
+
+def test_norun_heatmap(load_expression, load_ontology):
+    p = PAGE(
+        load_expression, 
+        load_ontology, 
+        n_shuffle=5, 
+        k=2)
+
+    try:
+        p.heatmap()
+        assert False
+    except AttributeError:
+        assert True
+
+
+def test_empty_heatmap(load_expression, load_ontology):
+    p = PAGE(
+        load_expression, 
+        load_ontology, 
+        n_shuffle=5, 
+        k=2)
+    p.run()
+
+    # set empty dataframe
+    p.results = pd.DataFrame([])
+
+    try:
+        p.heatmap()
+        assert False
+    except ValueError:
+        assert True
+
 

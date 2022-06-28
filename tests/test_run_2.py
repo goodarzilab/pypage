@@ -35,7 +35,8 @@ def test_run(load_expression, load_ontology):
         load_ontology,
         n_shuffle=10,
         k=5)
-    results, hm = p.run()
+    results = p.run()
+    hm = p.heatmap()
     # print(results)
     hm.convert_from_to('gs', 'ensg', 'human')
     hm.save('test_heatmap', show_reg=True)
