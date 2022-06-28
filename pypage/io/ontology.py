@@ -86,15 +86,15 @@ class GeneOntology:
              a dataframe in a long format
          """
         if ann_file[-2:] == 'gz':
-            f = gzip.open(ann_file, 'r')
+            f = gzip.open(ann_file, 'rt')
         else:
             f = open(ann_file)
 
         row_names = []
         column_names = set()
         for line in f:
-            if ann_file[-2:] == 'gz':
-                line = line.decode('ASCII')
+            # if ann_file[-2:] == 'gz':
+                # line = line.decode('ASCII')
             els = line.rstrip().split('\t')
             row_names.append(els[0])
             els.pop(0)
@@ -107,14 +107,14 @@ class GeneOntology:
         db_profiles = np.zeros((len(row_names), len(column_names)), dtype=int)
 
         if ann_file[-2:] == 'gz':
-            f = gzip.open(ann_file, 'r')
+            f = gzip.open(ann_file, 'rt')
         else:
             f = open(ann_file)
 
         i = 0
-        for line in open(ann_file):
-            if ann_file[-2:] == 'gz':
-                line = line.decode('ASCII')
+        for line in f:
+            # if ann_file[-2:] == 'gz':
+                # line = line.decode('ASCII')
             els = line.rstrip().split('\t')[1:]
             if 'http://' in els[0]:
                 els.pop(0)
