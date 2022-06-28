@@ -25,8 +25,7 @@ def load_expression():
 
 @pytest.fixture()
 def load_ontology():
-
-    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt')
+    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index_truncated.txt.gz')
     return ont
 
 
