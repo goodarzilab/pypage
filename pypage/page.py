@@ -166,6 +166,8 @@ class PAGE:
         self._subset_matrices()
         self._set_sizes()
 
+        self._is_fit = False
+
     def _set_jobs(self):
         """Sets the number of available jobs for numba parallel
         """
@@ -329,9 +331,14 @@ class PAGE:
 
         return np.array(existing)
 
-    def _gather_results(self) -> pd.DataFrame:
+    def _gather_results(self, empty=False) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
         """
+
+        # return empty dataframe if empty
+        if empty:
+            return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"])
+
         # estimate sign
         self.log_overrep_pvals = np.log10(self.overrep_pvals)
         self.log_underrep_pvals = np.log10(self.underrep_pvals)
@@ -346,12 +353,11 @@ class PAGE:
                                )
         return results
 
-    def _make_heatmap(self):
+    def _make_heatmap(self) -> Heatmap:
         """
-
         Returns
         -------
-
+        Heatmap
         """
 
         hm = Heatmap(np.array(self.results['pathway']),
@@ -360,7 +366,30 @@ class PAGE:
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
 
-    def run(self) -> (pd.DataFrame, Heatmap):
+    def heatmap(self) -> Heatmap:
+        """
+        Create a visualization of the PAGE results
+
+        Returns
+        =======
+        Heatmap
+
+        Examples
+        ========
+        >>> p = PAGE(exp, ont)
+        >>> results = p.run()
+        >>> hm = p.heatmap()
+        >>> hm.show()
+        """
+        if not self._is_fit:
+            raise AttributeError("PAGE must first be run")
+
+        if self.results.empty:
+            raise ValueError("There are no significant pathways to visualize")
+        else:
+            return self._make_heatmap()
+
+    def run(self) -> pd.DataFrame:
         """
         Perform the PAGE algorithm
 
@@ -387,13 +416,13 @@ class PAGE:
             self.pathway_indices = self._consolidate_pathways()
         else:
             self.pathway_indices = np.flatnonzero(self.informative)
+
         if len(self.pathway_indices) != 0:
             # hypergeometric testing over selected pathways
             self.overrep_pvals, self.underrep_pvals = self._significance_testing()
-
             self.results = self._gather_results()
-            self.hm = self._make_heatmap()
-
-            return self.results, self.hm
         else:
-            return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"]), None
+            self.results = self._gather_results(empty=True)
+
+        self._is_fit = True
+        return self.results
