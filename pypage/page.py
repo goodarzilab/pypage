@@ -405,7 +405,6 @@ class PAGE:
         """
 
         # calculate mutual information
-
         self.information = self._calculate_information()
 
         # select informative pathways
