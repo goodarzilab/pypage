@@ -331,26 +331,61 @@ class PAGE:
 
         return np.array(existing)
 
+    def _collapse_pvalues(self):
+        """Collapses p-values into a single 3D Array of shape (under/over, gene, bin)
+        """
+        self.pvals = np.stack([
+                    self.underrep_pvals, 
+                    self.overrep_pvals], axis=0)
+
+        self._build_minimums()
+        self._build_graphical_array()
+        self._build_sign()
+
+    def _build_minimums(self):
+        """
+        determines the minimum p-value for each pathway/bin
+        """
+        self.pval_minimums = self.pvals.min(axis=0)
+
+    def _build_graphical_array(self):
+        """
+        Creates the graphical array of log_pvals
+        This takes the minimum p-value between the underrepresented and overrepresented
+        p-values for each bin then takes the log10.
+        """
+        self.graphical_ar = np.log10(self.pvals.min(axis=0))
+        
+    def _build_sign(self):
+        """
+        Determines the sign of the p-value for each pathway and bin
+        -1 if underrepresented, 1 if overrepresented
+        """
+        self.sign = np.ones_like(self.graphical_ar)
+        self.sign[self.pvals.argmin(axis=0) == 0] = -1
+
     def _gather_results(self, empty=False) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
         """
 
         # return empty dataframe if empty
         if empty:
-            return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"])
+            return pd.DataFrame([])
 
-        # estimate sign
-        self.log_overrep_pvals = np.log10(self.overrep_pvals)
-        self.log_underrep_pvals = np.log10(self.underrep_pvals)
-        self.graphical_ar = np.minimum(self.log_overrep_pvals, self.log_underrep_pvals)
-        self.graphical_ar[self.log_overrep_pvals < self.log_underrep_pvals] *= -1  # make overrepresented positive
-        n_bins = self.graphical_ar.shape[1]
-        sign = self.graphical_ar[:, :n_bins // 2].sum(1) <= self.graphical_ar[:, n_bins // 2:].sum(1)
-        results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
-                                "CMI": self.information[self.pathway_indices],
-                                "p-value": self.pvalues[self.pathway_indices],
-                                "Regulation pattern": sign}
-                               )
+        self._collapse_pvalues()
+        results = []
+        for b in np.arange(self.pvals.shape[-1]):
+            results.append(pd.DataFrame({
+                "bin": b,
+                "pathway": self.ontology.pathways[self.pathway_indices],
+                "information": self.information[self.pathway_indices],
+                "pvalue": self.pval_minimums[:, b],
+                "sign": self.sign[:, b]}))
+        
+        results = pd.concat(results)
+        results["adj_pvalue"] = benjamini_hochberg(results.pvalue)
+        results["neg_log_pvalue"] = -np.log10(results.adj_pvalue)
+        results["signed_log_pvalue"] = results.sign * results.neg_log_pvalue
         return results
 
     def _make_heatmap(self) -> Heatmap:
