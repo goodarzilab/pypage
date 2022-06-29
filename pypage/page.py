@@ -401,6 +401,33 @@ class PAGE:
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
 
+
+    def _make_summary(self) -> pd.DataFrame:
+        """
+        Creates a summary table over each of the pathways across all the bins. 
+        The p-value reported is the minimum p-value across all the bins
+        the regulation pattern reflects whether the pathway is enriched 
+        in the first half of the bins (depletions) with a [-1] or if the
+        pathway is enriched in the second half of the bins (enrichments) with a [1]
+
+        Returns
+        =======
+        pd.DataFrame
+        """
+        n_bins = self.graphical_ar.shape[1]
+        
+        # true if more enriched in depletions, false if more enriched in enrichments 
+        sign_mask = self.pval_minimums[:, :n_bins // 2].sum(axis=1) <= \
+                self.pval_minimums[:, n_bins // 2:].sum(axis=1)
+        sign = np.ones(sign_mask.size, dtype=np.int8)
+        sign[sign_mask] = -1
+        
+        return pd.DataFrame({
+            "pathway": self.ontology.pathways[self.pathway_indices],
+            "information": self.information[self.pathway_indices],
+            "pvalue": np.log10(self.pval_minimums.min(axis=1)),
+            "regulation_pattern": sign})
+
     def heatmap(self) -> Heatmap:
         """
         Create a visualization of the PAGE results
@@ -423,6 +450,23 @@ class PAGE:
             raise ValueError("There are no significant pathways to visualize")
         else:
             return self._make_heatmap()
+
+    def summary(self) -> pd.DataFrame:
+        """
+        Return a summarized table of the PAGE results
+
+        Returns
+        =======
+        pd.DataFrame
+            A dataframe representing the summarized results of the analysis
+        """
+        if not self._is_fit:
+            raise AttributeError("PAGE must first be run")
+
+        if self.results.empty:
+            raise ValueError("There are no significant pathways to visualize")
+        else:
+            return self._make_summary()
 
     def run(self) -> pd.DataFrame:
         """

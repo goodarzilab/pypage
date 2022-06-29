@@ -49,6 +49,7 @@ def test_run(load_expression, load_ontology):
         n_shuffle=5, 
         k=2)
     results = p.run()
+    summary = p.summary()
 
 
 def test_norun_heatmap(load_expression, load_ontology):
@@ -78,6 +79,38 @@ def test_empty_heatmap(load_expression, load_ontology):
 
     try:
         p.heatmap()
+        assert False
+    except ValueError:
+        assert True
+
+
+def test_norun_summary(load_expression, load_ontology):
+    p = PAGE(
+        load_expression, 
+        load_ontology, 
+        n_shuffle=5, 
+        k=2)
+
+    try:
+        p.summary()
+        assert False
+    except AttributeError:
+        assert True
+
+
+def test_empty_summary(load_expression, load_ontology):
+    p = PAGE(
+        load_expression, 
+        load_ontology, 
+        n_shuffle=5, 
+        k=2)
+    p.run()
+
+    # set empty dataframe
+    p.results = pd.DataFrame([])
+
+    try:
+        p.summary()
         assert False
     except ValueError:
         assert True
