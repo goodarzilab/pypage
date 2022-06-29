@@ -98,12 +98,11 @@ class PAGE:
             n_shuffle: int = 1e4,
             alpha: float = 1e-2,
             k: int = 10,
-            r: float = 5.,
+            redundancy_ratio: float = 5.,
             base: int = 2,
             filter_redundant: bool = False,
             n_jobs: Optional[int] = 1,
-            function: Optional[str] = 'cmi',
-            redundancy_ratio: Optional[float] = 0.2):
+            function: Optional[str] = 'cmi'):
         """
         Initialize object
 
@@ -129,7 +128,7 @@ class PAGE:
             stopping the informative pathway search
             (`default = 20`)
 
-        r: float
+        redundancy_ratio: float
             the ratio of the conditional mutual information of a new accepted
             pathway against the mutual information of that pathway against
             all other accepted pathways. Only active when filter_redundant == True.
@@ -154,13 +153,12 @@ class PAGE:
         self.n_shuffle = int(n_shuffle)
         self.alpha = float(alpha)
         self.k = int(k)
-        self.r = float(r)
+        self.redundancy_ratio = float(redundancy_ratio)
         self.base = int(base)
         self.filter_redundant = filter_redundant
         self.n_jobs = n_jobs
         self._set_jobs()
         self.function = function
-        self.redundancy_ratio = redundancy_ratio
 
         self._intersect_genes()
         self._subset_matrices()
@@ -324,7 +322,7 @@ class PAGE:
                     self.y_bins)
 
             # accept if informative above all existing accepted pathways
-            if all_ri[i] < self.redundancy_ratio:
+            if np.all(all_ri > self.redundancy_ratio):
                 existing.append(idx)
             else:
                 pass
