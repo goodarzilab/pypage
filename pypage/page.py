@@ -95,15 +95,14 @@ class PAGE:
             self,
             expression: ExpressionProfile,
             ontology: GeneOntology,
-            n_shuffle: int = 1e4,
+            n_shuffle: int = 1e3,
             alpha: float = 1e-2,
-            k: int = 20,
-            r: float = 5.,
+            k: int = 10,
             base: int = 2,
             filter_redundant: bool = False,
-            n_jobs: Optional[int] = None,
+            n_jobs: Optional[int] = 1,
             function: Optional[str] = 'cmi',
-            redundancy_ratio: Optional[float] = 0.2):
+            redundancy_ratio: Optional[float] = .1):
         """
         Initialize object
 
@@ -129,12 +128,6 @@ class PAGE:
             stopping the informative pathway search
             (`default = 20`)
 
-        r: float
-            the ratio of the conditional mutual information of a new accepted
-            pathway against the mutual information of that pathway against
-            all other accepted pathways. Only active when filter_redundant == True.
-            (`default = 5.0`)
-
         base: int
             the base of the logarithm used when calculating entropy
             (`default = 2`)
@@ -154,7 +147,6 @@ class PAGE:
         self.n_shuffle = int(n_shuffle)
         self.alpha = float(alpha)
         self.k = int(k)
-        self.r = float(r)
         self.base = int(base)
         self.filter_redundant = filter_redundant
         self.n_jobs = n_jobs
@@ -295,7 +287,7 @@ class PAGE:
         existing = []
         inf_idx = np.flatnonzero(self.informative)
 
-        # iterate through pvalues in ascending order
+        # iterate through cmi in descending order
         pbar = tqdm(np.argsort(self.information)[::-1], desc="consolidating redundant pathways")
         for idx in pbar:
 
@@ -321,8 +313,7 @@ class PAGE:
                     self.y_bins,
                     self.y_bins)
 
-            # accept if informative above all existing accepted pathways
-            if all_ri[i] < self.redundancy_ratio:
+            if all(all_ri > self.redundancy_ratio):
                 existing.append(idx)
             else:
                 pass
@@ -339,6 +330,8 @@ class PAGE:
         self.graphical_ar[self.log_overrep_pvals < self.log_underrep_pvals] *= -1  # make overrepresented positive
         n_bins = self.graphical_ar.shape[1]
         sign = self.graphical_ar[:, :n_bins // 2].sum(1) <= self.graphical_ar[:, n_bins // 2:].sum(1)
+        sign = sign.astype(int)
+        sign[sign == 0] = -1
         results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
                                 "CMI": self.information[self.pathway_indices],
                                 "p-value": self.pvalues[self.pathway_indices],
