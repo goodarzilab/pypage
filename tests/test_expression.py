@@ -2,6 +2,7 @@
 """
 
 
+import pandas as pd
 import numpy as np
 from pypage import ExpressionProfile
 
@@ -56,7 +57,7 @@ def test_load_expression_assertion():
         assert False
 
 
-def test_load_expression_strategy_hist():
+"""def test_load_expression_strategy_hist():
     for _ in np.arange(T):
         genes, expression = get_expression()
 
@@ -81,7 +82,7 @@ def test_load_expression_strategy_hist():
         assert split_exp.n_bins == N_BINS
 
         # assert bins are different
-        assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)
+        assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)"""
 
 
 def test_load_bins():
@@ -95,9 +96,9 @@ def test_expression_conversion():
     df = pd.read_csv('example_data/bladder_refseq.tsv.gz',
                      sep="\t",
                      header=0,
-                     names=["gene", "exp"])
+                     names=["gene", "exp"],
+                     compression='gzip')
     exp = ExpressionProfile(df.iloc[:, 0],
                             df.iloc[:, 1],
-                            bin_strategy='split',
                             n_bins=20)
     exp.convert_from_to('refseq', 'ensg', 'human')

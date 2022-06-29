@@ -130,11 +130,11 @@ def test_ontology_max_assertion():
 
 
 def test_read_annotation_file():
-    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt')
+    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt.gz')
     return ont
 
 
 def test_convert_from_to():
-    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt')
+    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt.gz')
     ont.convert_from_to('ensg', 'gs', 'human')
     return ont
