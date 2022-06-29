@@ -45,4 +45,3 @@ def test_run(load_expression, load_ontology):
     print('tpr: %.2f\ntnr: %.2f' % (tpr, tnr))
     assert tpr > .9
     assert tnr > .9
-    print(tpr, tnr)
