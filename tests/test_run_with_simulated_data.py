@@ -10,16 +10,15 @@ from pypage import (
 
 @pytest.fixture()
 def load_expression():
-    df = pd.read_csv('example_data/simulated_expr.csv', header=0, index_col=0)
+    df = pd.read_csv('example_data/simulated_expr.csv.gz', header=0, index_col=0, compression='gzip')
     exp = ExpressionProfile(df.iloc[:, 0],
                             df.iloc[:, 1],
-                            bin_strategy='split',
                             n_bins=10)
     return exp
 
 @pytest.fixture()
 def load_ontology():
-    frame = pd.read_csv('example_data/simulated_df.csv', header=0, index_col=0)
+    frame = pd.read_csv('example_data/simulated_df.csv.gz', header=0, index_col=0, compression='gzip')
     ont = GeneOntology(
         frame.iloc[:, 0],
         frame.iloc[:, 1],
