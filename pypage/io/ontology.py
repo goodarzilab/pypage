@@ -112,7 +112,7 @@ class GeneOntology:
             f = open(ann_file)
 
         i = 0
-        for line in open(ann_file):
+        for line in f:
             if ann_file[-2:] == 'gz':
                 line = line.decode('ASCII')
             els = line.rstrip().split('\t')[1:]
