@@ -354,7 +354,7 @@ class PAGE:
         -1 if underrepresented, 1 if overrepresented
         """
         self.sign = np.ones_like(self.pval_minimums)
-        self.sign[self.pvals.argmin(axis=0) != 0] = -1
+        self.sign[self.pvals.argmin(axis=0) == 0] = -1
 
     def _build_graphical_array(self):
         """
@@ -362,7 +362,7 @@ class PAGE:
         This takes the minimum p-value between the underrepresented and overrepresented
         p-values for each bin then takes the log10.
         """
-        self.graphical_ar = np.log10(self.pval_minimums)
+        self.graphical_ar = -np.log10(self.pval_minimums)
         self.graphical_ar *= self.sign
 
     def _gather_results(self, empty=False) -> pd.DataFrame:
@@ -396,8 +396,9 @@ class PAGE:
         Heatmap
         """
 
-        hm = Heatmap(np.array(self.results['pathway']),
-                     self.graphical_ar)
+        hm = Heatmap(
+                self.ontology.pathways[self.pathway_indices],
+                self.graphical_ar)
 
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
