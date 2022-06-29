@@ -1,5 +1,5 @@
 import numpy as np
-from pypage import Heatmap
+from pypage.heatmap import Heatmap
 
 
 test_array = np.array([[ -6.33981683,  -7.80840227,  -7.93377824,  -8.42731731,
@@ -67,5 +67,5 @@ def test_heatmap():
 def test_heatmap_with_reg():
     hm = Heatmap(test_pathways, test_array)
     hm.add_gene_expression(test_pathways, test_reg_exp)
-    hm.show(isreg=True)
+    hm.show(show_reg=True)
 

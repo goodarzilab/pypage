@@ -32,8 +32,8 @@ def test_run(load_expression, load_ontology):
         load_expression,
         load_ontology,
         n_shuffle=100,
-        k=7,
-        alpha=1e-2)
+        k=10,
+        alpha=0.01)
     results, hm = p.run()
 
     positive = set(['upregulated_' + str(i) for i in range(50)] + ['downregulated_' + str(i) for i in range(50)])
@@ -45,3 +45,4 @@ def test_run(load_expression, load_ontology):
     print('tpr: %.2f\ntnr: %.2f' % (tpr, tnr))
     assert tpr > .9
     assert tnr > .9
+    print(tpr, tnr)
