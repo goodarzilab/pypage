@@ -3,6 +3,7 @@
 
 
 import numpy as np
+import pandas as pd
 from pypage import ExpressionProfile
 
 
@@ -89,3 +90,26 @@ def test_load_bins():
     exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
     assert exp.n_genes == N_GENES
     assert exp.n_bins == N_BINS
+
+
+def test_subsetting():
+    for _ in np.arange(T):
+        genes, expression = get_expression()
+
+        exp = ExpressionProfile(genes, expression)
+        subset = genes[np.random.random(genes.size) < 0.5]
+
+        bin_sub = exp.get_gene_subset(subset)
+        assert bin_sub.size == subset.size
+
+
+def test_expression_conversion():
+    df = pd.read_csv('example_data/bladder_refseq.tsv.gz',
+                     sep="\t",
+                     header=0,
+                     names=["gene", "exp"])
+    exp = ExpressionProfile(df.iloc[:, 0],
+                            df.iloc[:, 1],
+                            bin_strategy='split',
+                            n_bins=20)
+    exp.convert_from_to('refseq', 'ensg', 'human')

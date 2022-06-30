@@ -43,8 +43,13 @@ ont_frame = pd.read_csv(
 ont = GeneOntology(ont_frame.gene, ont_frame.pathway)
 
 # 3. Perform the statistical test
-p = PAGE(n_shuffle=500)
-results = p.run(exp, ont)
+p = PAGE(exp, ont, n_shuffle=500)
+results = p.run()
+summary = p.summary()
 
+# bin/pathway-level pvalues
 print(results)
+
+# pathway-level pvalues
+print(summary)
 ```
