@@ -44,7 +44,6 @@ def load_expression_bladder():
                      names=["gene", "exp"])
     exp = ExpressionProfile(df.iloc[:, 0],
                              df.iloc[:, 1],
-                             bin_strategy='split',
                             n_bins=20)
     exp.convert_from_to('refseq', 'ensg', 'human')
     return exp
