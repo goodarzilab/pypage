@@ -363,28 +363,21 @@ class PAGE:
         self.graphical_ar = -np.log10(self.pval_minimums)
         self.graphical_ar *= self.sign
 
-    def _gather_results(self, empty=False) -> pd.DataFrame:
+    def _gather_results(self) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
         """
 
-        # return empty dataframe if empty
-        if empty:
-            return pd.DataFrame([])
+        n_bins = self.pvals.shape[1]
+        sign = np.zeros(self.pvals.shape[0])
+        ratio_array = self.pvals[:, :n_bins // 2].sum(1) / self.pvals[:, n_bins // 2:].sum(1)
+        sign[ratio_array > 1.5] = -1
+        sign[ratio_array < 1/1.5] = 1
 
-        self._collapse_pvalues()
-        results = []
-        for b in np.arange(self.pvals.shape[-1]):
-            results.append(pd.DataFrame({
-                "bin": b,
-                "pathway": self.ontology.pathways[self.pathway_indices],
-                "information": self.information[self.pathway_indices],
-                "pvalue": self.pval_minimums[:, b],
-                "sign": self.sign[:, b]}))
-        
-        results = pd.concat(results)
-        results["adj_pvalue"] = benjamini_hochberg(results.pvalue)
-        results["neg_log_pvalue"] = -np.log10(results.adj_pvalue)
-        results["signed_log_pvalue"] = results.sign * results.neg_log_pvalue
+        results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
+                                "CMI": self.information[self.pathway_indices],
+                                "p-value": self.pvalues[self.pathway_indices],
+                                "Regulation pattern": sign}
+                               )
         return results
 
     def _make_heatmap(self) -> Heatmap:
@@ -400,7 +393,6 @@ class PAGE:
 
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
-
 
     def _make_summary(self) -> pd.DataFrame:
         """
