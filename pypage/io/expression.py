@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from typing import Optional
 from .accession_types import change_accessions
+import numba
 
 
 class ExpressionProfile:
@@ -45,7 +46,7 @@ class ExpressionProfile:
             y: np.ndarray,
             is_bin: bool = False,
             bin_strategy: Optional[str] = None,
-            n_bins: Optional[int] = None):
+            n_bins: Optional[int] = 10):
         """
         Parameters
         ==========
@@ -66,14 +67,26 @@ class ExpressionProfile:
         """
         self._is_bin = is_bin
         self._validate_inputs(x, y)
-        self._set_bin_strategy(bin_strategy)
+        self._process_input(x, y)
+        self.n_bins = n_bins
 
-        self._load_genes(x)
+    def _process_input(self,
+                       x: np.ndarray,
+                       y: np.ndarray):
+        """
+        sets the attributes accordingly to the inputs
+        Parameters
+        ----------
+        x: np.ndarray
+            input genes
+        y: np.ndarray
+            input expression
+        """
+        self.genes = np.array(x)
+        self.n_genes = self.genes.size
         self.raw_expression = np.array(y)
-
-        bins = self._load_expression(y, n_bins)
-        self._build_bool_array(x, bins)
-        self._build_bin_array()
+        self.genes = self.genes[~np.isnan(self.raw_expression)]
+        self.raw_expression = self.raw_expression[~np.isnan(self.raw_expression)]
 
     def _validate_inputs(
             self,
@@ -88,131 +101,33 @@ class ExpressionProfile:
         assert x.shape == y.shape, \
             "genes and expression/bin arrays must be equally shaped"
 
-    def _set_bin_strategy(
-            self,
-            bin_strategy: str):
-        """validates and sets bin strategy
+    def _discretize(self,
+                    inp_array: np.ndarray,
+                    bins: int,
+                    noise_std: Optional[float] = 0.000000001):
         """
-        known_strategy = ["hist", "split"]
-        if not bin_strategy:
-            self._bin_strategy = "hist"
-        else:
-            assert bin_strategy in known_strategy, \
-                f"unknown bin strategy: `{bin_strategy}`. Known strategies : {', '.join(known_strategy)}"
-            self._bin_strategy = bin_strategy
-
-    def _load_genes(
-            self,
-            genes: np.ndarray) -> np.ndarray:
-        """loads the genes from the dataframe
+        discretizes the expression profile
+        Parameters
+        ----------
+        inp_array: np.ndarray
+        bins: int
+        noise_std: float
+        Returns
+        -------
+        np.ndarray
+            discretized expression profile
         """
-        self.gene_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(genes)))}
-        self.genes = np.array(list(self.gene_indices.keys()))
-        self.n_genes = self.genes.size
 
-    def _load_expression(
-            self,
-            expression: np.ndarray,
-            n_bins: Optional[int]) -> np.ndarray:
-        """loads the expression/bin data from the dataframe
-        """
-        if self._is_bin:
-            self.n_bins = np.unique(expression).size
-            return self._load_bins(expression)
-        else:
-            if not n_bins:
-                self.n_bins = 10
-            else:
-                assert n_bins > 1, \
-                    "number of bins must be greater than 1"
-                self.n_bins = n_bins
-            bins = self._build_bin_indices(expression)
-            return self._load_bins(bins)
+        length = len(inp_array)
+        to_discr = inp_array + np.random.normal(0, noise_std, length)
 
-    def _build_bin_indices(
-            self,
-            expression: np.ndarray,
-            epsilon: float = 1e-6) -> np.ndarray:
-        """converts expression data to binned data
-        """
-        if self._bin_strategy == "hist":
-            return self._build_bin_hist(expression)
-        elif self._bin_strategy == "split":
-            return self._build_bin_split(expression)
-
-    def _build_bin_hist(
-            self,
-            expression: np.ndarray,
-            epsilon: float = 1e-6) -> np.ndarray:
-        """converts expression data to binned data using histogram method
-        """
-        self.bin_sizes, self.bin_ranges = np.histogram(expression, bins=self.n_bins)
-        self.bin_ranges[-1] += epsilon # added because digitize is not inclusive at maximum
-        return np.digitize(expression, self.bin_ranges)
-
-    def _build_bin_split(
-            self,
-            expression: np.ndarray) -> np.ndarray:
-        """converts expression data to binned data using equivlanet split method
-        """
-        argidx = np.argsort(expression)
-        max_size = expression.size
-        bin_size = int(max_size / self.n_bins)
-
-        bin_identities = np.zeros(max_size, dtype=int)
-        self.bin_sizes = np.zeros(self.n_bins, dtype=int)
-        self.bin_ranges = np.zeros(self.n_bins)
-        self.bin_ranges[-1] = expression.max()
-
-        for i in np.arange(0, self.n_bins):
-            lower_bound = expression[argidx[bin_size * i]]
-
-            if i < self.n_bins - 1:
-                upper_bound = expression[argidx[bin_size * (i + 1)]]
-                mask = (expression >= lower_bound) & (expression < upper_bound)
-
-            # put remaining into last bin
-            else:
-                mask = (expression >= lower_bound)
-
-            self.bin_sizes[i] = mask.sum()
-            self.bin_ranges[i] = lower_bound
-            bin_identities[mask] = i
-
-        return bin_identities
-
-    def _load_bins(
-            self,
-            bins: np.ndarray) -> np.ndarray:
-        """loads the bin data from an array
-        """
-        self.bin_indices = {n: idx for idx, n in enumerate(np.sort(np.unique(bins)))}
-        self.bins = np.array(list(self.bin_indices.keys()))
-        return bins
-
-    def _build_bool_array(
-            self,
-            genes: np.ndarray,
-            bins: np.ndarray):
-        """creates the internal bool array
-        """
-        self.bool_array = np.zeros((self.n_bins, self.n_genes), dtype=int)
-        for g, b in zip(genes, bins):
-            self.bool_array[self.bin_indices[b]][self.gene_indices[g]] += 1
-
-    def _build_bin_array(self):
-        """creates the internal bin array
-        """
-        self.bin_array = np.argmax(self.bool_array, axis=0)
-
-    def __repr__(
-            self) -> str:
-        s = ""
-        s += "Expression Profile\n"
-        s += f">> num_genes: {self.n_genes}\n"
-        s += f">> num_bins: {self.n_bins}\n"
-        s += f">> bin_sizes: {' '.join(self.bin_sizes.astype(str))}\n"
-        return s
+        bins_for_discr = np.interp(np.linspace(0, length, bins + 1),
+                                   np.arange(length),
+                                   np.sort(to_discr))
+        bins_for_discr[-1] += 1  # otherwise numpy creates one extra bin with only 1 point
+        digitized = np.digitize(to_discr, bins_for_discr)
+        digitized = digitized - 1
+        return digitized
 
     def get_gene_subset(
             self,
@@ -233,7 +148,11 @@ class ExpressionProfile:
         """
 
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
-        return self.bin_array[idxs]
+
+        sub_expression = self.raw_expression[idxs]
+        bin_array = self._discretize(sub_expression, self.n_bins)
+
+        return bin_array
 
     def convert_from_to(self,
                         input_format: str,
@@ -256,3 +175,12 @@ class ExpressionProfile:
                                        input_format,
                                        output_format,
                                        species)
+
+    def __repr__(
+            self) -> str:
+        s = ""
+        s += "Expression Profile\n"
+        s += f">> num_genes: {self.n_genes}\n"
+        s += f">> num_bins: {self.n_bins}\n"
+        s += f">> bin_sizes: {' '.join(self.bin_sizes.astype(str))}\n"
+        return s
