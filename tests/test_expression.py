@@ -57,34 +57,6 @@ def test_load_expression_assertion():
         assert False
 
 
-def test_load_expression_strategy_hist():
-    for _ in np.arange(T):
-        genes, expression = get_expression()
-
-        # test hist binning
-        hist_exp = ExpressionProfile(
-                genes, 
-                expression, 
-                n_bins=N_BINS, 
-                bin_strategy='hist')
-        
-        assert hist_exp.n_genes == N_GENES
-        assert hist_exp.n_bins == N_BINS
-
-        # test split binning
-        split_exp = ExpressionProfile(
-                genes, 
-                expression, 
-                n_bins=N_BINS, 
-                bin_strategy='split')
-        
-        assert split_exp.n_genes == N_GENES
-        assert split_exp.n_bins == N_BINS
-
-        # assert bins are different
-        assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)
-
-
 def test_load_bins():
     genes, bins = get_bins()
     exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
@@ -110,6 +82,5 @@ def test_expression_conversion():
                      names=["gene", "exp"])
     exp = ExpressionProfile(df.iloc[:, 0],
                             df.iloc[:, 1],
-                            bin_strategy='split',
                             n_bins=20)
     exp.convert_from_to('refseq', 'ensg', 'human')
