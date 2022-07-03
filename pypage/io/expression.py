@@ -45,7 +45,6 @@ class ExpressionProfile:
             x: np.ndarray,
             y: np.ndarray,
             is_bin: bool = False,
-            bin_strategy: Optional[str] = None,
             n_bins: Optional[int] = 10):
         """
         Parameters
@@ -182,5 +181,4 @@ class ExpressionProfile:
         s += "Expression Profile\n"
         s += f">> num_genes: {self.n_genes}\n"
         s += f">> num_bins: {self.n_bins}\n"
-        s += f">> bin_sizes: {' '.join(self.bin_sizes.astype(str))}\n"
         return s
