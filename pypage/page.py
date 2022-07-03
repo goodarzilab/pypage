@@ -363,10 +363,13 @@ class PAGE:
         self.graphical_ar = -np.log10(self.pval_minimums)
         self.graphical_ar *= self.sign
 
-    def _gather_results(self) -> pd.DataFrame:
+    def _gather_results(self, empty=False) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
         """
+        if empty:
+            return pd.DataFrame([])
 
+        self._collapse_pvalues()
         n_bins = self.pvals.shape[1]
         sign = np.zeros(self.pvals.shape[0])
         ratio_array = self.pvals[:, :n_bins // 2].sum(1) / self.pvals[:, n_bins // 2:].sum(1)
@@ -375,7 +378,8 @@ class PAGE:
 
         results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
                                 "CMI": self.information[self.pathway_indices],
-                                "p-value": self.pvalues[self.pathway_indices],
+                                "CMI p-value": self.pvalues[self.pathway_indices],
+                                "min hypergeometric p-value": self.pval_minimums,
                                 "Regulation pattern": sign}
                                )
         return results
@@ -393,6 +397,7 @@ class PAGE:
 
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
+
 
     def _make_summary(self) -> pd.DataFrame:
         """
