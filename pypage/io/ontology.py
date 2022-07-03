@@ -47,7 +47,7 @@ class GeneOntology:
             genes: Optional[np.ndarray] = None,
             pathways: Optional[np.ndarray] = None,
             ann_file: Optional[str] = None,
-            n_bins: Optional[int] = 6,
+            n_bins: Optional[int] = 2,
             first_col_is_genes: Optional[bool] = False):
         """
         Parameters
@@ -187,37 +187,17 @@ class GeneOntology:
         del self._pathway_indices
         del self._gene_indices
 
-    def _build_bin_split(
+    def _build_bin_hist(
             self,
             membership: np.ndarray,
-            n_bins: int) -> np.ndarray:
-        """converts membership array to binned data using equivlanet split method
+            n_bins: int,
+            epsilon: float = 1e-6
+            ) -> np.ndarray:
+        """converts expression data to binned data using histogram method
         """
-        argidx = np.argsort(membership)
-        max_size = membership.size
-        bin_size = int(max_size / n_bins)
-
-        bin_identities = np.zeros(max_size, dtype=int)
-        self.bin_sizes = np.zeros(n_bins, dtype=int)
-        self.bin_ranges = np.zeros(n_bins)
-        self.bin_ranges[-1] = membership.max()
-
-        for i in np.arange(0, n_bins):
-            lower_bound = membership[argidx[bin_size * i]]
-
-            if i < n_bins - 1:
-                upper_bound = membership[argidx[bin_size * (i + 1)]]
-                mask = (membership >= lower_bound) & (membership < upper_bound)
-
-            # put remaining into last bin
-            else:
-                mask = (membership >= lower_bound)
-
-            self.bin_sizes[i] = mask.sum()
-            self.bin_ranges[i] = lower_bound
-            bin_identities[mask] = i
-
-        return bin_identities
+        self.bin_sizes, self.bin_ranges = np.histogram(membership, bins=n_bins)
+        self.bin_ranges[-1] += epsilon  # added because digitize is not inclusive at maximum
+        return np.digitize(membership, self.bin_ranges)
 
     def _make_membership_profile(self) -> np.ndarray:
         """create a gene membership array"""
@@ -262,7 +242,7 @@ class GeneOntology:
         """
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
         sub_membership = self.membership[idxs]
-        sub_membership_binned = self._build_bin_split(sub_membership, self.n_bins)
+        sub_membership_binned = self._build_bin_hist(sub_membership, self.n_bins)
         return sub_membership_binned
 
     def filter_pathways(
@@ -335,5 +315,3 @@ class GeneOntology:
         s += f">> num_pathways: {self.n_pathways}\n"
         s += ">> avg_pathway_size: {:.2f}\n".format(self.avg_p_size)
         return s
-
-
