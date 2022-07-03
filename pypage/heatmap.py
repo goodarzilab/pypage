@@ -90,17 +90,20 @@ class Heatmap:
 
     def _columnwise_heatmap(self,
                             graphical_ar: np.ndarray,
-                            regulator_exp: np.ndarray):
+                            regulator_exp: np.ndarray,
+                            max_val: int):
         self.ims = []
         if self.isreg:
             current_cmap = copy.copy(matplotlib.cm.get_cmap(self.cmap_reg))
             current_cmap.set_bad(color='black')
-            im = self.ax[0].imshow(np.atleast_2d(regulator_exp).T, cmap=current_cmap, aspect="auto")
+            im = self.ax[0].imshow(np.atleast_2d(regulator_exp).T, cmap=current_cmap, aspect="auto", vmin=-1, vmax=1)
             self.ims.append(im)
-            im = self.ax[1].imshow(np.atleast_2d(graphical_ar), cmap=self.cmap_main, aspect="auto", vmin=-15, vmax=15)
+            im = self.ax[1].imshow(np.atleast_2d(graphical_ar),
+                                   cmap=self.cmap_main, aspect="auto", vmin=-max_val, vmax=max_val)
             self.ims.append(im)
         else:
-            im = self.ax.imshow(np.atleast_2d(graphical_ar), cmap=self.cmap_main, aspect="auto", vmin=-15, vmax=15)
+            im = self.ax.imshow(np.atleast_2d(graphical_ar),
+                                cmap=self.cmap_main, aspect="auto", vmin=-max_val, vmax=max_val)
             self.ims.append(im)
 
     def _add_colorbar(self):
@@ -122,7 +125,7 @@ class Heatmap:
             self.fig.colorbar(self.ims[i], cax=cax)
             cax.set_title(colorbar_names[i], fontsize=10)
 
-    def _make_heatmap(self, max_rows):
+    def _make_heatmap(self, max_rows, max_val):
         pathways, graphical_ar, regulator_exp = self._subset_and_sort_pathways(max_rows)
         n_pathways = len(pathways)
         plt.rcParams.update({'font.weight': 'roman'})
@@ -143,7 +146,7 @@ class Heatmap:
         else:
             self.fig, self.ax = plt.subplots(1, 1, figsize=(figure_width, figure_height))
 
-        self._columnwise_heatmap(graphical_ar, regulator_exp)
+        self._columnwise_heatmap(graphical_ar, regulator_exp, max_val)
 
         if self.isreg:
             self.ax[0].set(xticks=[], yticks=np.arange(n_pathways), yticklabels=pathways)
@@ -172,7 +175,8 @@ class Heatmap:
     def save(self,
              output_name: str,
              max_rows: Optional[int] = 50,
-             show_reg: Optional[bool] = False):
+             show_reg: Optional[bool] = False,
+             max_val: Optional[int] = 5):
         """
         saves a heatmap
         Parameters
@@ -189,14 +193,15 @@ class Heatmap:
         if self.expression is not None:
             self._calculate_regulator_expression()
             self.isreg = show_reg and (sum(~np.isnan(self.regulator_exp)) != 0)
-        self._make_heatmap(max_rows)
+        self._make_heatmap(max_rows, max_val)
         if output_name.split('.')[-1] not in ['svg', 'jpg', 'png']:
             output_name += '.svg'
         self.fig.savefig(output_name, bbox_inches='tight')
 
     def show(self,
              max_rows: Optional[int] = 50,
-             show_reg: Optional[bool] = False):
+             show_reg: Optional[bool] = False,
+             max_val: Optional[int] = 5):
         """
         shows a heatmap
         Returns
@@ -205,7 +210,7 @@ class Heatmap:
         if self.expression is not None:
             self._calculate_regulator_expression()
             self.isreg = show_reg and (sum(~np.isnan(self.regulator_exp)) != 0)
-        self._make_heatmap(max_rows)
+        self._make_heatmap(max_rows, max_val)
         self.fig.show()
 
     def convert_from_to(self,
