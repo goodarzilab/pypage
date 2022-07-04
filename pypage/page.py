@@ -379,7 +379,7 @@ class PAGE:
         results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
                                 "CMI": self.information[self.pathway_indices],
                                 "CMI p-value": self.pvalues[self.pathway_indices],
-                                "min hypergeometric p-value": self.pval_minimums.tolist(),
+                                "min hypergeometric p-value": self.pval_minimums.min(axis=1),
                                 "Regulation pattern": sign}
                                )
         return results
