@@ -22,7 +22,7 @@ def load_ontology():
     ont = GeneOntology(
         frame.iloc[:, 0],
         frame.iloc[:, 1],
-        n_bins=6)
+        n_bins=2)
     return ont
 
 
@@ -33,7 +33,7 @@ def test_run(load_expression, load_ontology):
         n_shuffle=100,
         k=10,
         alpha=0.01)
-    results, hm = p.run()
+    results = p.run()
 
     positive = set(['upregulated_' + str(i) for i in range(50)] + ['downregulated_' + str(i) for i in range(50)])
     negative = set(['random_' + str(i) for i in range(1000)])
