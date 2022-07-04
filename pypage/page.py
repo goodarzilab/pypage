@@ -370,9 +370,9 @@ class PAGE:
             return pd.DataFrame([])
 
         self._collapse_pvalues()
-        n_bins = self.pvals.shape[1]
-        sign = np.zeros(self.pvals.shape[0])
-        ratio_array = self.pvals[:, :n_bins // 2].sum(1) / self.pvals[:, n_bins // 2:].sum(1)
+        n_bins = self.graphical_ar.shape[1]
+        sign = np.zeros(self.graphical_ar.shape[0])
+        ratio_array = self.graphical_ar[:, :n_bins // 2].sum(1) / self.graphical_ar[:, n_bins // 2:].sum(1)
         sign[ratio_array > 1.5] = -1
         sign[ratio_array < 1/1.5] = 1
 
