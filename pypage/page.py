@@ -367,7 +367,7 @@ class PAGE:
         """Gathers the results from the experiment into a single dataframe
         """
         if empty:
-            return pd.DataFrame([])
+            return pd.DataFrame(columns=["pathway", "CMI", "CMI p-value", "min hypergeometric p-value", "Regulation pattern"])
 
         self._collapse_pvalues()
         n_bins = self.graphical_ar.shape[1]
