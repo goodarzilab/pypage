@@ -3,6 +3,7 @@
 
 import pytest
 import pandas as pd
+import numpy as np
 from pypage import (
     PAGE,
     ExpressionProfile,
@@ -15,9 +16,10 @@ def load_expression():
                      sep="\t",
                      header=0,
                      names=["gene", "exp"])
+    exp_array = np.array([df.iloc[:, 1]] * 5)
     exp = ExpressionProfile(df.iloc[:, 0],
-                             df.iloc[:, 1],
-                             bin_strategy='split',
+                            exp_array,
+                            bin_strategy='split',
                             n_bins=10)
     exp.convert_from_to('refseq', 'ensg', 'human')
     return exp
@@ -37,8 +39,5 @@ def test_run(load_expression, load_ontology):
         n_shuffle=100,
         k=7,
         filter_redundant=True
-        )
-    results, hm = p.run()
-    # print(results)
-    hm.convert_from_to('gs', 'ensg', 'human')
-    hm.save('test_heatmap', show_reg=True)
+    )
+    results = p.run()
