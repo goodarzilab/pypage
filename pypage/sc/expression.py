@@ -3,11 +3,13 @@
 
 
 import numpy as np
+import pandas as pd
 from typing import Optional
-from .accession_types import change_accessions
+from ..io.accession_types import change_accessions
+import numba
 
 
-class ExpressionProfile:
+class scExpressionProfile:
     """Container for a Sample Expression Profile
 
     Attributes
@@ -83,15 +85,7 @@ class ExpressionProfile:
         """
         self.genes = np.array(x)
         self.n_genes = self.genes.size
-        self.raw_expression = np.array(y)
-        notnan_mask = ~ np.isnan(self.raw_expression)
-        if len(self.raw_expression.shape) == 2:
-            notnan_mask = notnan_mask.any(0)
-            self.genes = self.genes[notnan_mask]
-            self.raw_expression = self.raw_expression[:, notnan_mask]
-        else:
-            self.genes = self.genes[notnan_mask]
-            self.raw_expression = self.raw_expression[notnan_mask]
+        self.raw_expression = y
 
     def _validate_inputs(
             self,
@@ -101,7 +95,7 @@ class ExpressionProfile:
         """
         assert x.size > 0, \
             "provided array must not be empty"
-        assert x.shape[0] == y.shape[-1], \
+        assert x.shape[0] == y.shape[1], \
             "genes and expression/bin arrays must be equally shaped"
 
     def _discretize(self,
@@ -120,7 +114,8 @@ class ExpressionProfile:
         np.ndarray
             discretized expression profile
         """
-
+        if type(inp_array) != np.ndarray:
+            inp_array = np.array(inp_array.todense())[0]
         length = len(inp_array)
         to_discr = inp_array + np.random.normal(0, noise_std, length)
 
@@ -152,16 +147,12 @@ class ExpressionProfile:
 
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
 
-        if len(self.raw_expression.shape) == 1:
-            sub_expression = self.raw_expression[idxs]
-            bin_array = self._discretize(sub_expression, self.n_bins)
-        else:
-            sub_expression = self.raw_expression[:, idxs]
-            bin_array = np.apply_along_axis(lambda x: self._discretize(x, self.n_bins), 0, sub_expression)
+        sub_expression = self.raw_expression[:, idxs]
 
-        self.bin_array = bin_array
-        self.modified = True
-        return self.bin_array
+        bin_array = np.zeros(sub_expression.shape, dtype=int)
+        for i in range(sub_expression.shape[0]):
+            bin_array[i] = self._discretize(sub_expression[i], self.n_bins)
+        return bin_array
 
     def convert_from_to(self,
                         input_format: str,
@@ -194,4 +185,5 @@ class ExpressionProfile:
         s += "Expression Profile\n"
         s += f">> num_genes: {self.n_genes}\n"
         s += f">> num_bins: {self.n_bins}\n"
+        s += f">> bin_sizes: {' '.join(self.bin_sizes.astype(str))}\n"
         return s

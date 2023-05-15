@@ -57,6 +57,7 @@ class GeneOntology:
         pathways: np.ndarray
             an array associated pathways
         """
+        self.modified = False
         if ann_file:
             self._read_annotation_file(ann_file, first_col_is_genes)
         else:
@@ -241,7 +242,9 @@ class GeneOntology:
             the bool_array subsetted to the indices of the `gene_subset`
         """
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
-        return self.bool_array[:, idxs]
+        self.sub_bool_array = self.bool_array[:, idxs]
+        self.modified = True
+        return self.sub_bool_array
 
     def get_membership_subset(
             self,
@@ -325,6 +328,9 @@ class GeneOntology:
                                        input_format,
                                        output_format,
                                        species)
+
+    def reset(self):
+        self.modified = False
 
     def __repr__(self) -> str:
         """

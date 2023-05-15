@@ -30,7 +30,7 @@ def load_ontology():
     return ont
 
 
-def test_run(load_expression, load_ontology):
+def test_enrichment(load_expression, load_ontology):
     p = PAGE(
         load_expression,
         load_ontology,
@@ -38,7 +38,4 @@ def test_run(load_expression, load_ontology):
         k=7,
         filter_redundant=True
         )
-    results, hm = p.run()
-    # print(results)
-    hm.convert_from_to('gs', 'ensg', 'human')
-    hm.save('test_heatmap', show_reg=True)
+    results = p.get_enriched_genes('NFKB2')

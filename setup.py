@@ -15,4 +15,7 @@ setup(
        'sphinx',
        "numpydoc",
        "pydata-sphinx-theme",
-       "sphinx-autodoc-typehints"])
+       "sphinx-autodoc-typehints",
+       "pytest",
+       "pybiomart",
+       "matplotlib"])

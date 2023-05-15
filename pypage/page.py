@@ -154,9 +154,10 @@ class PAGE:
         self.function = function
         self.redundancy_ratio = redundancy_ratio
 
-        self._intersect_genes()
-        self._subset_matrices()
-        self._set_sizes()
+        if not self.expression.modified and not self.ontology.modified:
+            self._intersect_genes()
+            self._subset_matrices()
+            self._set_sizes()
 
     def _set_jobs(self):
         """Sets the number of available jobs for numba parallel
@@ -172,8 +173,8 @@ class PAGE:
         """Intersects to genes found in both sets
         """
         self.shared_genes = np.sort(np.intersect1d(
-            self.expression.genes,
-            self.ontology.genes))
+                                    self.expression.genes,
+                                    self.ontology.genes))
 
     def _subset_matrices(self):
         """Subsets the bool arrays to the gene intersection
@@ -219,7 +220,38 @@ class PAGE:
                     base=self.base)
         return information
 
-    def _significance_testing(self) -> (np.ndarray, np.ndarray):
+    def _calculate_information_2D(self) -> np.ndarray:
+        """Calculates mutual or conditional mutual information for each pathway
+        """
+        information = np.zeros((self.exp_bins.shape[0], self.num_pathways))
+        if self.function == 'mi':
+            desc = "calculating mutual information"
+        else:
+            desc = "calculating conditional mutual information"
+        pbar = tqdm(range(self.exp_bins.shape[0]), desc=desc)
+        for exp_idx in pbar:
+            for idx in range(self.num_pathways):
+                if self.function == 'mi':
+                    information[exp_idx, idx] = mutual_information(
+                        self.exp_bins[exp_idx],
+                        self.ont_bool[idx],
+                        self.x_bins,
+                        self.y_bins,
+                        base=self.base)
+                else:
+                    information[exp_idx, idx] = conditional_mutual_information(
+                        self.exp_bins[exp_idx],
+                        self.ont_bool[idx],
+                        self.membership_bins,
+                        self.x_bins,
+                        self.y_bins,
+                        self.z_bins,
+                        base=self.base)
+        information = pd.DataFrame(information, columns=self.ontology.pathways)
+
+        return information
+
+    def _calculate_enrichment(self) -> (np.ndarray, np.ndarray):
         """
         Iterates through informative pathways to calculate hypergeometric pvalues
         """
@@ -329,7 +361,11 @@ class PAGE:
         self.graphical_ar = np.minimum(self.log_overrep_pvals, self.log_underrep_pvals)
         self.graphical_ar[self.log_overrep_pvals < self.log_underrep_pvals] *= -1  # make overrepresented positive
         n_bins = self.graphical_ar.shape[1]
-        sign = self.graphical_ar[:, :n_bins // 2].sum(1) <= self.graphical_ar[:, n_bins // 2:].sum(1)
+        s1 = self.graphical_ar[:, :n_bins // 3].copy()
+        s2 = self.graphical_ar[:, -n_bins // 3:].copy()
+        s1[s1 < 0] = 0
+        s2[s2 < 0] = 0
+        sign = s1.sum(1) <= s2.sum(1)
         sign = sign.astype(int)
         sign[sign == 0] = -1
         results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
@@ -369,6 +405,9 @@ class PAGE:
         """
 
         # calculate mutual information
+        if len(self.exp_bins.shape) == 2:
+            self.information = self._calculate_information_2D()
+            return self.information
 
         self.information = self._calculate_information()
 
@@ -382,7 +421,7 @@ class PAGE:
             self.pathway_indices = np.flatnonzero(self.informative)
         if len(self.pathway_indices) != 0:
             # hypergeometric testing over selected pathways
-            self.overrep_pvals, self.underrep_pvals = self._significance_testing()
+            self.overrep_pvals, self.underrep_pvals = self._calculate_enrichment()
 
             self.results = self._gather_results()
             self.hm = self._make_heatmap()
@@ -390,3 +429,13 @@ class PAGE:
             return self.results, self.hm
         else:
             return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"]), None
+
+    def get_enriched_genes(self, pathway) -> list:
+        assert pathway in self.ontology.pathways, "pathway not present"
+        pathway_idx = np.where(self.ontology.pathways == pathway)[0][0]
+        pathway_binary = self.ont_bool[pathway_idx]
+        res = []
+        for bin in set(self.exp_bins):
+            genes_in_bin = self.shared_genes[np.where(pathway_binary & (self.exp_bins == bin))[0]]
+            res.append(genes_in_bin)
+        return res
