@@ -6,7 +6,7 @@ import pandas as pd
 from pypage import (
     PAGE,
     ExpressionProfile,
-    GeneOntology)
+    GeneSets)
 
 @pytest.fixture()
 def load_expression():
@@ -19,7 +19,7 @@ def load_expression():
 @pytest.fixture()
 def load_ontology():
     frame = pd.read_csv('example_data/simulated_df.csv.gz', header=0, index_col=0, compression='gzip')
-    ont = GeneOntology(
+    ont = GeneSets(
         frame.iloc[:, 0],
         frame.iloc[:, 1],
         n_bins=6)

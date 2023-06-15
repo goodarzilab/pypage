@@ -3,7 +3,7 @@ import pandas as pd
 from pypage import (
     scPAGE,
     scExpressionProfile,
-    GeneOntology)
+    GeneSets)
 import numpy as np
 import pandas as pd
 from scipy import sparse
@@ -29,7 +29,7 @@ def load_expression():
 
 @pytest.fixture()
 def load_ontology():
-    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt.gz', n_bins=6)
+    ont = GeneSets(ann_file='example_data/hg38_cistrome_index.txt.gz', n_bins=6)
     return ont
 
 def test_run(load_expression, load_ontology):

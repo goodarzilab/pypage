@@ -9,7 +9,7 @@ from .accession_types import change_accessions
 import gzip
 
 
-class GeneOntology:
+class GeneSets:
     """Container for a Set of Pathways
 
     Attributes

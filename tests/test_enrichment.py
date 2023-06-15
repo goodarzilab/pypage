@@ -6,7 +6,7 @@ import pandas as pd
 from pypage import (
     PAGE,
     ExpressionProfile,
-    GeneOntology)
+    GeneSets)
 
 
 @pytest.fixture()
@@ -26,7 +26,7 @@ def load_expression():
 @pytest.fixture()
 def load_ontology():
 
-    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt.gz', n_bins=6)
+    ont = GeneSets(ann_file='example_data/hg38_cistrome_index.txt.gz', n_bins=6)
     return ont
 
 

@@ -2,7 +2,7 @@
 """
 
 from .io import (
-    GeneOntology,
+    GeneSets,
     ExpressionProfile)
 from .utils import (
     empirical_pvalue,
@@ -37,7 +37,7 @@ class PAGE:
     ----------
     expression: ExpressionProfile
         the provided expression profile
-    ontology: GeneOntology
+    ontology: GeneSets
         the provided ontology
     shared_genes: np.ndarray
         the shared genes between the `ExpressionProfile` and `GeneOntology`
@@ -94,7 +94,7 @@ class PAGE:
     def __init__(
             self,
             expression: ExpressionProfile,
-            ontology: GeneOntology,
+            ontology: GeneSets,
             n_shuffle: int = 1e3,
             alpha: float = 1e-2,
             k: int = 10,
@@ -111,7 +111,7 @@ class PAGE:
         expression: ExpressionProfile
             The provided `ExpressionProfile`
 
-        ontology: GeneOntology
+        ontology: GeneSets
             the provided `GeneOntology`
 
         n_shuffle: int
