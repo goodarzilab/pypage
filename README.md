@@ -32,9 +32,10 @@ pyPAGE is implemented as a python package.
 
 To run it, you need to, first, download the relevant gene-set annotations and precompute differential gene expression.
 
-You can download preprocessed annotations of TF and RBP regulons from [here](google disk).<br/>
+You can download preprocessed annotations of TF and RBP regulons from [here](https://drive.google.com/drive/folders/1CTRQvTzhFANi45PqHfPNxEiN5NiKro11?usp=sharing ).<br/>
 Moreover, [MSigDB](https://www.gsea-msigdb.org/gsea/msigdb/human/collections.jsp#H) is a great resource to search for an annotation of interest.
 For example, you might want to use "GO: Gene Ontology gene sets" and "MIR: microRNA targets".
+Also there is a [useful resource](https://bmcresnotes.biomedcentral.com/articles/10.1186/s13104-018-3856-x/tables/1) of TF targets annotations.
 
 Then you need to compute differential gene expression. 
 For the analysis of bulk data, you would typically use DESeq2, limma or EdgeR. These packages provide user with the log fold changes and their significance.
