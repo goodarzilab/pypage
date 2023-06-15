@@ -43,7 +43,6 @@ class ExpressionProfile:
             x: np.ndarray,
             y: np.ndarray,
             is_bin: bool = False,
-            bin_strategy: Optional[str] = None,
             n_bins: Optional[int] = 10):
         """
         Parameters
@@ -55,12 +54,6 @@ class ExpressionProfile:
             of a specific gene, or the bin/cluster that gene belongs to.
         is_bin: bool
             whether the provided dataframe is prebinned.
-        bin_strategy: str
-            the method to bin expression, choices are ['hist', 'split'].
-            'hist' will create a histogram with `n_bins` which will group
-            genes of similar counts more closely together but with unequal bin sizes.
-            'split' will create bins of equivalent sizes.
-            default = 'hist'
         n_bins: int
         """
         self.modified = False

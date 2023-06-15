@@ -3,7 +3,7 @@
 
 from .page import PAGE
 from .io import (
-    GeneOntology,
+    GeneSets,
     ExpressionProfile)
 from .sc import (
     scExpressionProfile,

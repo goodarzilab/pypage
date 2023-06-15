@@ -4,9 +4,9 @@
 import pytest 
 import pandas as pd
 from pypage import (
-        PAGE,
-        ExpressionProfile, 
-        GeneOntology)
+    PAGE,
+    ExpressionProfile,
+    GeneSets)
 
 @pytest.fixture()
 def load_expression():
@@ -29,7 +29,7 @@ def load_ontology():
             header=None,
             names=["gene", "pathway"])
 
-    return GeneOntology(
+    return GeneSets(
             frame.iloc[:, 0],
             frame.iloc[:, 1])
 

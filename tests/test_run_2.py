@@ -6,7 +6,7 @@ import pandas as pd
 from pypage import (
     PAGE,
     ExpressionProfile,
-    GeneOntology)
+    GeneSets)
 
 
 @pytest.fixture()
@@ -17,16 +17,14 @@ def load_expression():
                      names=["gene", "exp"])
     exp = ExpressionProfile(df.iloc[:, 0],
                              df.iloc[:, 1],
-                             bin_strategy='split',
-                            n_bins=10)
+                             n_bins=10)
     exp.convert_from_to('refseq', 'ensg', 'human')
     return exp
 
 
 @pytest.fixture()
 def load_ontology():
-
-    ont = GeneOntology(ann_file='example_data/hg38_cistrome_index.txt.gz', n_bins=6)
+    ont = GeneSets(ann_file='example_data/hg38_cistrome_index.txt.gz', n_bins=6)
     return ont
 
 
