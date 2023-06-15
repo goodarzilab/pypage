@@ -40,16 +40,16 @@ class ExpressionProfile:
     """
     def __init__(
             self,
-            x: np.ndarray,
-            y: np.ndarray,
+            genes: np.ndarray,
+            expression: np.ndarray,
             is_bin: bool = False,
             n_bins: Optional[int] = 10):
         """
         Parameters
         ==========
-        x: np.ndarray
-            The array representing the gene names
-        y: np.ndarray
+        genes: np.ndarray
+            The array with the gene names
+        expression: np.ndarray
             The array representing either the continuous expression value
             of a specific gene, or the bin/cluster that gene belongs to.
         is_bin: bool
@@ -58,8 +58,8 @@ class ExpressionProfile:
         """
         self.modified = False
         self._is_bin = is_bin
-        self._validate_inputs(x, y)
-        self._process_input(x, y)
+        self._validate_inputs(genes, expression)
+        self._process_input(genes, expression)
         self.n_bins = n_bins
 
     def _process_input(self,

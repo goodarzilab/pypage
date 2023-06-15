@@ -47,7 +47,7 @@ class GeneSets:
             genes: Optional[np.ndarray] = None,
             pathways: Optional[np.ndarray] = None,
             ann_file: Optional[str] = None,
-            n_bins: Optional[int] = 6,
+            n_bins: Optional[int] = 3,
             first_col_is_genes: Optional[bool] = False):
         """
         Parameters

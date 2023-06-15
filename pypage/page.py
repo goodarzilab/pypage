@@ -94,11 +94,10 @@ class PAGE:
     def __init__(
             self,
             expression: ExpressionProfile,
-            ontology: GeneSets,
+            genesets: GeneSets,
             n_shuffle: int = 1e3,
             alpha: float = 1e-2,
             k: int = 10,
-            base: int = 2,
             filter_redundant: bool = False,
             n_jobs: Optional[int] = 1,
             function: Optional[str] = 'cmi',
@@ -111,7 +110,7 @@ class PAGE:
         expression: ExpressionProfile
             The provided `ExpressionProfile`
 
-        ontology: GeneSets
+        genesets: GeneSets
             the provided `GeneOntology`
 
         n_shuffle: int
@@ -121,7 +120,7 @@ class PAGE:
         alpha: float
             the maximum p-value threshold to consider a pathway informative
             with respect to the permuted mutual information distribution
-            (`default = 5e-3`)
+            (`default = 5e-2`)
 
         k: int
             the number of contiguous uninformative pathways to consider before
@@ -142,12 +141,12 @@ class PAGE:
         """
 
         self.expression = expression
-        self.ontology = ontology
+        self.ontology = genesets
 
         self.n_shuffle = int(n_shuffle)
         self.alpha = float(alpha)
         self.k = int(k)
-        self.base = int(base)
+        self.base = 2
         self.filter_redundant = filter_redundant
         self.n_jobs = n_jobs
         self._set_jobs()
@@ -430,9 +429,9 @@ class PAGE:
         else:
             return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"]), None
 
-    def get_enriched_genes(self, pathway) -> list:
-        assert pathway in self.ontology.pathways, "pathway not present"
-        pathway_idx = np.where(self.ontology.pathways == pathway)[0][0]
+    def get_enriched_genes(self, name) -> list:
+        assert name in self.ontology.pathways, "pathway not present"
+        pathway_idx = np.where(self.ontology.pathways == name)[0][0]
         pathway_binary = self.ont_bool[pathway_idx]
         res = []
         for bin in set(self.exp_bins):
