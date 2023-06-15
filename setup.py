@@ -1,10 +1,17 @@
 from setuptools import setup
 
+with open("README.md", "r") as f:
+    long_description = f.read()
+
 setup(
-   name='pypage',
-   version='0.0.9',
+   name='bio-pypage',
+   version='1.0.0',
    description='Python implementation of the PAGE algorithm',
-   author='Noam Teyssier',
+   author='Artemy Bakulin, Noam Teyssier',
+   long_description=long_description,
+   long_description_content_type="text/markdown",
+   url='https://github.com/noamteyssier/pypage',
+   author_email="logic2000.bakulin@gmail.com",
    packages=['pypage'],
    install_requires=[
        'numpy',
@@ -18,4 +25,9 @@ setup(
        "sphinx-autodoc-typehints",
        "pytest",
        "pybiomart",
-       "matplotlib"])
+       "matplotlib"],
+   classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],)
