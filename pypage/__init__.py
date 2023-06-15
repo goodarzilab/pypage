@@ -5,7 +5,5 @@ from .page import PAGE
 from .io import (
     GeneSets,
     ExpressionProfile)
-from .sc import (
-    scExpressionProfile,
-    scPAGE)
+
 
