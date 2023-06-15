@@ -15,7 +15,7 @@ Moreover, pyPAGE is applicable both to the analysis of bulk and single-cell RNA-
 Downloading and installing pyPAGE is as easy as typing the following command in your terminal:
 
 ```bash
-pip install pyPAGE
+pip install bio-pypage
 ```
 
 Or alternatively you can install it from the source:
