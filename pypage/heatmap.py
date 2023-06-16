@@ -111,7 +111,7 @@ class Heatmap:
         rows = 1 + self.isreg
         cols = 1
         gs = GridSpec(rows, cols)
-        gs.update(left=0.7, right=0.75, wspace=1, hspace=0.3)
+        gs.update(left=0.8, right=0.85, wspace=1, hspace=0.3, bottom=0.2, top=0.5)
 
         if self.isreg:
             colorbar_names = ['Regulator\'s \n expression', 'Regulon\'s \n enrichment']
@@ -125,7 +125,7 @@ class Heatmap:
             self.fig.colorbar(self.ims[i], cax=cax)
             cax.set_title(colorbar_names[i], fontsize=10)
 
-    def _make_heatmap(self, max_rows, max_val):
+    def _make_heatmap(self, max_rows, max_val, title):
         pathways, graphical_ar, regulator_exp = self._subset_and_sort_pathways(max_rows)
         n_pathways = len(pathways)
         plt.rcParams.update({'font.weight': 'roman'})
@@ -157,7 +157,7 @@ class Heatmap:
             self.ax.set(xticks=[], yticks=np.arange(n_pathways), yticklabels=pathways)
             self.ax.xaxis.set_label_position('top')
             plt.xticks(rotation=90)
-
+        plt.title(title)
         self._add_colorbar()
 
     def add_gene_expression(self,
@@ -176,7 +176,8 @@ class Heatmap:
              output_name: str,
              max_rows: Optional[int] = 50,
              show_reg: Optional[bool] = False,
-             max_val: Optional[int] = 5):
+             max_val: Optional[int] = 5,
+             title=''):
         """
         saves a heatmap
         Parameters
@@ -193,7 +194,7 @@ class Heatmap:
         if self.expression is not None:
             self._calculate_regulator_expression()
             self.isreg = show_reg and (sum(~np.isnan(self.regulator_exp)) != 0)
-        self._make_heatmap(max_rows, max_val)
+        self._make_heatmap(max_rows, max_val, title)
         if output_name.split('.')[-1] not in ['svg', 'jpg', 'png']:
             output_name += '.svg'
         self.fig.savefig(output_name, bbox_inches='tight')
@@ -201,7 +202,8 @@ class Heatmap:
     def show(self,
              max_rows: Optional[int] = 50,
              show_reg: Optional[bool] = False,
-             max_val: Optional[int] = 5):
+             max_val: Optional[int] = 5,
+             title=''):
         """
         shows a heatmap
         Returns
@@ -210,7 +212,7 @@ class Heatmap:
         if self.expression is not None:
             self._calculate_regulator_expression()
             self.isreg = show_reg and (sum(~np.isnan(self.regulator_exp)) != 0)
-        self._make_heatmap(max_rows, max_val)
+        self._make_heatmap(max_rows, max_val, title)
         self.fig.show()
 
     def convert_from_to(self,

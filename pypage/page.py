@@ -2,7 +2,7 @@
 """
 
 from .io import (
-    GeneOntology,
+    GeneSets,
     ExpressionProfile)
 from .utils import (
     empirical_pvalue,
@@ -37,7 +37,7 @@ class PAGE:
     ----------
     expression: ExpressionProfile
         the provided expression profile
-    ontology: GeneOntology
+    ontology: GeneSets
         the provided ontology
     shared_genes: np.ndarray
         the shared genes between the `ExpressionProfile` and `GeneOntology`
@@ -94,15 +94,14 @@ class PAGE:
     def __init__(
             self,
             expression: ExpressionProfile,
-            ontology: GeneOntology,
-            n_shuffle: int = 1e4,
+            genesets: GeneSets,
+            n_shuffle: int = 1e3,
             alpha: float = 1e-2,
             k: int = 10,
-            redundancy_ratio: float = 5.,
-            base: int = 2,
             filter_redundant: bool = False,
             n_jobs: Optional[int] = 1,
-            function: Optional[str] = 'cmi'):
+            function: Optional[str] = 'cmi',
+            redundancy_ratio: Optional[float] = .1):
         """
         Initialize object
 
@@ -111,7 +110,7 @@ class PAGE:
         expression: ExpressionProfile
             The provided `ExpressionProfile`
 
-        ontology: GeneOntology
+        genesets: GeneSets
             the provided `GeneOntology`
 
         n_shuffle: int
@@ -121,18 +120,12 @@ class PAGE:
         alpha: float
             the maximum p-value threshold to consider a pathway informative
             with respect to the permuted mutual information distribution
-            (`default = 5e-3`)
+            (`default = 5e-2`)
 
         k: int
             the number of contiguous uninformative pathways to consider before
             stopping the informative pathway search
             (`default = 20`)
-
-        redundancy_ratio: float
-            the ratio of the conditional mutual information of a new accepted
-            pathway against the mutual information of that pathway against
-            all other accepted pathways. Only active when filter_redundant == True.
-            (`default = 5.0`)
 
         base: int
             the base of the logarithm used when calculating entropy
@@ -144,27 +137,26 @@ class PAGE:
 
         n_jobs: int
             The number of parallel jobs to use in the analysis
-            (`default = 1`)
+            (`default = all available cores`)
         """
 
         self.expression = expression
-        self.ontology = ontology
+        self.ontology = genesets
 
         self.n_shuffle = int(n_shuffle)
         self.alpha = float(alpha)
         self.k = int(k)
-        self.redundancy_ratio = float(redundancy_ratio)
-        self.base = int(base)
+        self.base = 2
         self.filter_redundant = filter_redundant
         self.n_jobs = n_jobs
         self._set_jobs()
         self.function = function
+        self.redundancy_ratio = redundancy_ratio
 
-        self._intersect_genes()
-        self._subset_matrices()
-        self._set_sizes()
-
-        self._is_fit = False
+        if not self.expression.modified and not self.ontology.modified:
+            self._intersect_genes()
+            self._subset_matrices()
+            self._set_sizes()
 
     def _set_jobs(self):
         """Sets the number of available jobs for numba parallel
@@ -180,8 +172,8 @@ class PAGE:
         """Intersects to genes found in both sets
         """
         self.shared_genes = np.sort(np.intersect1d(
-            self.expression.genes,
-            self.ontology.genes))
+                                    self.expression.genes,
+                                    self.ontology.genes))
 
     def _subset_matrices(self):
         """Subsets the bool arrays to the gene intersection
@@ -227,7 +219,38 @@ class PAGE:
                     base=self.base)
         return information
 
-    def _significance_testing(self) -> (np.ndarray, np.ndarray):
+    def _calculate_information_2D(self) -> np.ndarray:
+        """Calculates mutual or conditional mutual information for each pathway
+        """
+        information = np.zeros((self.exp_bins.shape[0], self.num_pathways))
+        if self.function == 'mi':
+            desc = "calculating mutual information"
+        else:
+            desc = "calculating conditional mutual information"
+        pbar = tqdm(range(self.exp_bins.shape[0]), desc=desc)
+        for exp_idx in pbar:
+            for idx in range(self.num_pathways):
+                if self.function == 'mi':
+                    information[exp_idx, idx] = mutual_information(
+                        self.exp_bins[exp_idx],
+                        self.ont_bool[idx],
+                        self.x_bins,
+                        self.y_bins,
+                        base=self.base)
+                else:
+                    information[exp_idx, idx] = conditional_mutual_information(
+                        self.exp_bins[exp_idx],
+                        self.ont_bool[idx],
+                        self.membership_bins,
+                        self.x_bins,
+                        self.y_bins,
+                        self.z_bins,
+                        base=self.base)
+        information = pd.DataFrame(information, columns=self.ontology.pathways)
+
+        return information
+
+    def _calculate_enrichment(self) -> (np.ndarray, np.ndarray):
         """
         Iterates through informative pathways to calculate hypergeometric pvalues
         """
@@ -295,7 +318,7 @@ class PAGE:
         existing = []
         inf_idx = np.flatnonzero(self.informative)
 
-        # iterate through pvalues in ascending order
+        # iterate through cmi in descending order
         pbar = tqdm(np.argsort(self.information)[::-1], desc="consolidating redundant pathways")
         for idx in pbar:
 
@@ -321,151 +344,51 @@ class PAGE:
                     self.y_bins,
                     self.y_bins)
 
-            # accept if informative above all existing accepted pathways
-            if np.all(all_ri > self.redundancy_ratio):
+            if all(all_ri > self.redundancy_ratio):
                 existing.append(idx)
             else:
                 pass
 
         return np.array(existing)
 
-    def _collapse_pvalues(self):
-        """Collapses p-values into a single 3D Array of shape (under/over, gene, bin)
-        """
-        self.pvals = np.stack([
-                    self.underrep_pvals, 
-                    self.overrep_pvals], axis=0)
-
-        self._build_minimums()
-        self._build_sign()
-        self._build_graphical_array()
-
-    def _build_minimums(self):
-        """
-        determines the minimum p-value for each pathway/bin
-        """
-        self.pval_minimums = self.pvals.min(axis=0)
-
-    def _build_sign(self):
-        """
-        Determines the sign of the p-value for each pathway and bin
-        -1 if underrepresented, 1 if overrepresented
-        """
-        self.sign = np.ones_like(self.pval_minimums)
-        self.sign[self.pvals.argmin(axis=0) == 0] = -1
-
-    def _build_graphical_array(self):
-        """
-        Creates the graphical array of log_pvals
-        This takes the minimum p-value between the underrepresented and overrepresented
-        p-values for each bin then takes the log10.
-        """
-        self.graphical_ar = -np.log10(self.pval_minimums)
-        self.graphical_ar *= self.sign
-
-    def _gather_results(self, empty=False) -> pd.DataFrame:
+    def _gather_results(self) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
         """
-        if empty:
-            return pd.DataFrame(columns=["pathway", "CMI", "CMI p-value", "min hypergeometric p-value", "Regulation pattern"])
-
-        self._collapse_pvalues()
+        # estimate sign
+        self.log_overrep_pvals = np.log10(self.overrep_pvals)
+        self.log_underrep_pvals = np.log10(self.underrep_pvals)
+        self.graphical_ar = np.minimum(self.log_overrep_pvals, self.log_underrep_pvals)
+        self.graphical_ar[self.log_overrep_pvals < self.log_underrep_pvals] *= -1  # make overrepresented positive
         n_bins = self.graphical_ar.shape[1]
-        sign = np.zeros(self.graphical_ar.shape[0])
-        ratio_array = self.graphical_ar[:, :n_bins // 2].sum(1) / self.graphical_ar[:, n_bins // 2:].sum(1)
-        sign[ratio_array > 1.5] = -1
-        sign[ratio_array < 1/1.5] = 1
-
+        s1 = self.graphical_ar[:, :n_bins // 3].copy()
+        s2 = self.graphical_ar[:, -n_bins // 3:].copy()
+        s1[s1 < 0] = 0
+        s2[s2 < 0] = 0
+        sign = s1.sum(1) <= s2.sum(1)
+        sign = sign.astype(int)
+        sign[sign == 0] = -1
         results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
                                 "CMI": self.information[self.pathway_indices],
-                                "CMI p-value": self.pvalues[self.pathway_indices],
-                                "min hypergeometric p-value": self.pval_minimums.min(axis=1),
+                                "p-value": self.pvalues[self.pathway_indices],
                                 "Regulation pattern": sign}
                                )
         return results
 
-    def _make_heatmap(self) -> Heatmap:
-        """
-        Returns
-        -------
-        Heatmap
+    def _make_heatmap(self):
         """
 
-        hm = Heatmap(
-                self.ontology.pathways[self.pathway_indices],
-                self.graphical_ar)
+        Returns
+        -------
+
+        """
+
+        hm = Heatmap(np.array(self.results['pathway']),
+                     self.graphical_ar)
 
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
 
-
-    def _make_summary(self) -> pd.DataFrame:
-        """
-        Creates a summary table over each of the pathways across all the bins. 
-        The p-value reported is the minimum p-value across all the bins
-        the regulation pattern reflects whether the pathway is enriched 
-        in the first half of the bins (depletions) with a [-1] or if the
-        pathway is enriched in the second half of the bins (enrichments) with a [1]
-
-        Returns
-        =======
-        pd.DataFrame
-        """
-        n_bins = self.graphical_ar.shape[1]
-        
-        # true if more enriched in depletions, false if more enriched in enrichments 
-        sign_mask = self.pval_minimums[:, :n_bins // 2].sum(axis=1) <= \
-                self.pval_minimums[:, n_bins // 2:].sum(axis=1)
-        sign = np.ones(sign_mask.size, dtype=np.int8)
-        sign[sign_mask] = -1
-        
-        return pd.DataFrame({
-            "pathway": self.ontology.pathways[self.pathway_indices],
-            "information": self.information[self.pathway_indices],
-            "pvalue": np.log10(self.pval_minimums.min(axis=1)),
-            "regulation_pattern": sign})
-
-    def heatmap(self) -> Heatmap:
-        """
-        Create a visualization of the PAGE results
-
-        Returns
-        =======
-        Heatmap
-
-        Examples
-        ========
-        >>> p = PAGE(exp, ont)
-        >>> results = p.run()
-        >>> hm = p.heatmap()
-        >>> hm.show()
-        """
-        if not self._is_fit:
-            raise AttributeError("PAGE must first be run")
-
-        if self.results.empty:
-            raise ValueError("There are no significant pathways to visualize")
-        else:
-            return self._make_heatmap()
-
-    def summary(self) -> pd.DataFrame:
-        """
-        Return a summarized table of the PAGE results
-
-        Returns
-        =======
-        pd.DataFrame
-            A dataframe representing the summarized results of the analysis
-        """
-        if not self._is_fit:
-            raise AttributeError("PAGE must first be run")
-
-        if self.results.empty:
-            raise ValueError("There are no significant pathways to visualize")
-        else:
-            return self._make_summary()
-
-    def run(self) -> pd.DataFrame:
+    def run(self) -> (pd.DataFrame, Heatmap):
         """
         Perform the PAGE algorithm
 
@@ -481,6 +404,10 @@ class PAGE:
         """
 
         # calculate mutual information
+        if len(self.exp_bins.shape) == 2:
+            self.information = self._calculate_information_2D()
+            return self.information
+
         self.information = self._calculate_information()
 
         # select informative pathways
@@ -491,13 +418,23 @@ class PAGE:
             self.pathway_indices = self._consolidate_pathways()
         else:
             self.pathway_indices = np.flatnonzero(self.informative)
-
         if len(self.pathway_indices) != 0:
             # hypergeometric testing over selected pathways
-            self.overrep_pvals, self.underrep_pvals = self._significance_testing()
-            self.results = self._gather_results()
-        else:
-            self.results = self._gather_results(empty=True)
+            self.overrep_pvals, self.underrep_pvals = self._calculate_enrichment()
 
-        self._is_fit = True
-        return self.results
+            self.results = self._gather_results()
+            self.hm = self._make_heatmap()
+
+            return self.results, self.hm
+        else:
+            return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"]), None
+
+    def get_enriched_genes(self, name) -> list:
+        assert name in self.ontology.pathways, "pathway not present"
+        pathway_idx = np.where(self.ontology.pathways == name)[0][0]
+        pathway_binary = self.ont_bool[pathway_idx]
+        res = []
+        for bin in set(self.exp_bins):
+            genes_in_bin = self.shared_genes[np.where(pathway_binary & (self.exp_bins == bin))[0]]
+            res.append(genes_in_bin)
+        return res

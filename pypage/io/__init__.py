@@ -1,2 +1,2 @@
 from .expression import ExpressionProfile
-from .ontology import GeneOntology
+from .ontology import GeneSets
