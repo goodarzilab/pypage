@@ -3,10 +3,8 @@
 
 
 import numpy as np
-import pandas as pd
 from typing import Optional
 from .accession_types import change_accessions
-import numba
 
 
 class ExpressionProfile:
@@ -42,31 +40,26 @@ class ExpressionProfile:
     """
     def __init__(
             self,
-            x: np.ndarray,
-            y: np.ndarray,
+            genes: np.ndarray,
+            expression: np.ndarray,
             is_bin: bool = False,
             n_bins: Optional[int] = 10):
         """
         Parameters
         ==========
-        x: np.ndarray
-            The array representing the gene names
-        y: np.ndarray
+        genes: np.ndarray
+            The array with the gene names
+        expression: np.ndarray
             The array representing either the continuous expression value
             of a specific gene, or the bin/cluster that gene belongs to.
         is_bin: bool
             whether the provided dataframe is prebinned.
-        bin_strategy: str
-            the method to bin expression, choices are ['hist', 'split'].
-            'hist' will create a histogram with `n_bins` which will group
-            genes of similar counts more closely together but with unequal bin sizes.
-            'split' will create bins of equivalent sizes.
-            default = 'hist'
         n_bins: int
         """
+        self.modified = False
         self._is_bin = is_bin
-        self._validate_inputs(x, y)
-        self._process_input(x, y)
+        self._validate_inputs(genes, expression)
+        self._process_input(genes, expression)
         self.n_bins = n_bins
 
     def _process_input(self,
@@ -84,8 +77,14 @@ class ExpressionProfile:
         self.genes = np.array(x)
         self.n_genes = self.genes.size
         self.raw_expression = np.array(y)
-        self.genes = self.genes[~np.isnan(self.raw_expression)]
-        self.raw_expression = self.raw_expression[~np.isnan(self.raw_expression)]
+        notnan_mask = ~ np.isnan(self.raw_expression)
+        if len(self.raw_expression.shape) == 2:
+            notnan_mask = notnan_mask.any(0)
+            self.genes = self.genes[notnan_mask]
+            self.raw_expression = self.raw_expression[:, notnan_mask]
+        else:
+            self.genes = self.genes[notnan_mask]
+            self.raw_expression = self.raw_expression[notnan_mask]
 
     def _validate_inputs(
             self,
@@ -95,9 +94,7 @@ class ExpressionProfile:
         """
         assert x.size > 0, \
             "provided array must not be empty"
-        assert x.size == y.size, \
-            "genes and expression/bin arrays must be equal sized"
-        assert x.shape == y.shape, \
+        assert x.shape[0] == y.shape[-1], \
             "genes and expression/bin arrays must be equally shaped"
 
     def _discretize(self,
@@ -148,10 +145,16 @@ class ExpressionProfile:
 
         idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
 
-        sub_expression = self.raw_expression[idxs]
-        bin_array = self._discretize(sub_expression, self.n_bins)
+        if len(self.raw_expression.shape) == 1:
+            sub_expression = self.raw_expression[idxs]
+            bin_array = self._discretize(sub_expression, self.n_bins)
+        else:
+            sub_expression = self.raw_expression[:, idxs]
+            bin_array = np.apply_along_axis(lambda x: self._discretize(x, self.n_bins), 0, sub_expression)
 
-        return bin_array
+        self.bin_array = bin_array
+        self.modified = True
+        return self.bin_array
 
     def convert_from_to(self,
                         input_format: str,
@@ -174,6 +177,9 @@ class ExpressionProfile:
                                        input_format,
                                        output_format,
                                        species)
+
+    def reset(self):
+        self.modified = False
 
     def __repr__(
             self) -> str:
