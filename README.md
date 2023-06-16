@@ -48,40 +48,6 @@ import numpy as np
 from scipy.stats import mannwhitneyu
 
 
-<<<<<<< HEAD
-# 2. load ontology data
-ont_frame = pd.read_csv(
-  "example_data/GO_BP_2021_index.txt.gz", 
-  sep="\t", 
-  header=None, 
-  names=["gene", "pathway"])
-ont = GeneOntology(ont_frame.gene, ont_frame.pathway)
-
-# 3. Perform the statistical test
-p = PAGE(exp, ont, n_shuffle=500)
-results = p.run()
-summary = p.summary()
-
-# bin/pathway-level pvalues
-print(results)
-
-# pathway-level pvalues
-print(summary)
-||||||| fd65cda
-# 2. load ontology data
-ont_frame = pd.read_csv(
-  "example_data/GO_BP_2021_index.txt.gz", 
-  sep="\t", 
-  header=None, 
-  names=["gene", "pathway"])
-ont = GeneOntology(ont_frame.gene, ont_frame.pathway)
-
-# 3. Perform the statistical test
-p = PAGE(n_shuffle=500)
-results = p.run(exp, ont)
-
-print(results)
-=======
 def count_difexp_with_u_test(cells_A, cells_B):
     """
     Computes differential gene expression between two groups of cells
@@ -102,7 +68,6 @@ def count_difexp_with_u_test(cells_A, cells_B):
             p_values[i] = mannwhitneyu(cells_A[:, i], cells_B[:, i])[1]
     difexp = sign * (1 - p_values)
     return difexp
->>>>>>> 3ad32d051c5e983a6ade7dc3eeadef196a575548
 ```
 
 Note, that to perform the analysis post-transcriptional regulation, you need to estimate differential trancript stability.
