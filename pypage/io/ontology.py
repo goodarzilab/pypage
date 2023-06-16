@@ -134,6 +134,7 @@ class GeneSets:
         self.genes = np.array(db_genes)
         self.bool_array = db_profiles
         self.n_genes = len(self.genes)
+        self.n_pathways = len(self.pathways)
 
     def _validate_inputs(
             self,
@@ -339,7 +340,6 @@ class GeneSets:
         s += "Gene Ontology\n"
         s += f">> num_genes: {self.n_genes}\n"
         s += f">> num_pathways: {self.n_pathways}\n"
-        s += ">> avg_pathway_size: {:.2f}\n".format(self.avg_p_size)
         return s
 
 
