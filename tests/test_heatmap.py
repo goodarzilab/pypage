@@ -1,5 +1,5 @@
 import numpy as np
-from pypage import Heatmap
+from pypage.heatmap import Heatmap
 
 
 test_array = np.array([[ -6.33981683,  -7.80840227,  -7.93377824,  -8.42731731,

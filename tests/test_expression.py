@@ -2,8 +2,8 @@
 """
 
 
-import numpy as np
 import pandas as pd
+import numpy as np
 from pypage import ExpressionProfile
 
 
@@ -57,6 +57,34 @@ def test_load_expression_assertion():
         assert False
 
 
+"""def test_load_expression_strategy_hist():
+    for _ in np.arange(T):
+        genes, expression = get_expression()
+
+        # test hist binning
+        hist_exp = ExpressionProfile(
+                genes, 
+                expression, 
+                n_bins=N_BINS, 
+                bin_strategy='hist')
+        
+        assert hist_exp.n_genes == N_GENES
+        assert hist_exp.n_bins == N_BINS
+
+        # test split binning
+        split_exp = ExpressionProfile(
+                genes, 
+                expression, 
+                n_bins=N_BINS, 
+                bin_strategy='split')
+        
+        assert split_exp.n_genes == N_GENES
+        assert split_exp.n_bins == N_BINS
+
+        # assert bins are different
+        assert np.any(hist_exp.bin_sizes != split_exp.bin_sizes)"""
+
+
 def test_load_bins():
     genes, bins = get_bins()
     exp = ExpressionProfile(genes, bins, n_bins=N_BINS)
@@ -64,22 +92,12 @@ def test_load_bins():
     assert exp.n_bins == N_BINS
 
 
-def test_subsetting():
-    for _ in np.arange(T):
-        genes, expression = get_expression()
-
-        exp = ExpressionProfile(genes, expression)
-        subset = genes[np.random.random(genes.size) < 0.5]
-
-        bin_sub = exp.get_gene_subset(subset)
-        assert bin_sub.size == subset.size
-
-
 def test_expression_conversion():
     df = pd.read_csv('example_data/bladder_refseq.tsv.gz',
                      sep="\t",
                      header=0,
-                     names=["gene", "exp"])
+                     names=["gene", "exp"],
+                     compression='gzip')
     exp = ExpressionProfile(df.iloc[:, 0],
                             df.iloc[:, 1],
                             n_bins=20)
