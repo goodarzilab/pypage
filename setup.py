@@ -5,12 +5,12 @@ with open("README.md", "r") as f:
 
 setup(
    name='bio-pypage',
-   version='0.1.3',
+   version='0.1.4',
    description='Python implementation of the PAGE algorithm',
    author='Artemy Bakulin, Noam Teyssier',
    long_description=long_description,
    long_description_content_type="text/markdown",
-   url='https://github.com/noamteyssier/pypage',
+   url='https://github.com/goodarzilab/pypage',
    author_email="logic2000.bakulin@gmail.com",
    packages=['pypage', 'pypage.io'],
    install_requires=[
