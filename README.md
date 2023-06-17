@@ -21,7 +21,7 @@ pip install bio-pypage
 Or alternatively you can install it from the source:
 
 ```bash
-git clone https://github.com/noamteyssier/pypage
+git clone https://github.com/goodarzilab/pypage
 cd pypage
 pip install -e .
 ```
@@ -130,7 +130,7 @@ def run_pyPAGE(expression, annotation):
 
 ## Manual
 
-For an exhaustive description of pyPAGE functions refer to the [manual](https://github.com/noamteyssier/pyPAGE/MANUAL.md).
+For an exhaustive description of pyPAGE functions refer to the [manual](https://github.com/goodarzilab/pyPAGE/MANUAL.md).
 
 ## License
 MIT license
