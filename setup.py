@@ -5,7 +5,7 @@ with open("README.md", "r") as f:
 
 setup(
    name='bio-pypage',
-   version='0.1.4',
+   version='0.1.5',
    description='Python implementation of the PAGE algorithm',
    author='Artemy Bakulin, Noam Teyssier',
    long_description=long_description,
