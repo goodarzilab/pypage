@@ -130,7 +130,7 @@ def run_pyPAGE(expression, annotation):
 
 ## Manual
 
-For an exhaustive description of pyPAGE functions refer to the [manual](https://github.com/goodarzilab/pyPAGE/MANUAL.md).
+For an exhaustive description of pyPAGE functions refer to the [manual](https://github.com/goodarzilab/pypage/blob/main/MANUAL.md).
 
 ## License
 MIT license
