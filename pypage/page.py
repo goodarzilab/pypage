@@ -438,3 +438,21 @@ class PAGE:
             genes_in_bin = self.shared_genes[np.where(pathway_binary & (self.exp_bins == bin))[0]]
             res.append(genes_in_bin)
         return res
+
+    def get_es_matrix(self):
+        """
+        Returns the enrichment score matrix for each pathway and bin
+
+        enrichment score is defined as the log10 of the hypergeometric p-value
+        (overrepresented scores per bin are positive and underrepresented scores are negative)
+
+        Returns
+        =======
+        pd.DataFrame
+            A dataframe representing the results of the analysis as a matrix (rows are pathways and columns are bins)
+        """
+        hm = self._make_heatmap()
+        return pd.DataFrame(
+            hm._subset_and_sort_pathways()[1],
+            index=hm._subset_and_sort_pathways()[0]
+        )
