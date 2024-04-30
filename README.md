@@ -113,7 +113,7 @@ Finally, run pyPAGE algorithm and visualize the results:
 ```python3
 from pypage import PAGE
 
-def run_pyPAGE(expression, annotation):
+def run_pyPAGE(expression, annotation, show_reg=False):
     
     p = PAGE(
         expression,
@@ -123,10 +123,15 @@ def run_pyPAGE(expression, annotation):
         filter_redundant=True
     )
     results, hm = p.run()
-    hm.show(show_reg=True)
+    if show_reg:
+        hm.convert_from_to('gs', 'ensg', 'human')
+    hm.show(show_reg=show_reg)
     
     return results
 ```
+
+If your annotation gene-sets are named after regulators and you want to display their expression in the output, you should convert their names to match the accession type used in your expression data. Additionally, make sure to set the show_reg parameter to true in the Heatmap.show function to enable this feature.
+
 
 ## Manual
 
