@@ -355,8 +355,8 @@ class PAGE:
         """Gathers the results from the experiment into a single dataframe
         """
         # estimate sign
-        self.log_overrep_pvals = np.log10(self.overrep_pvals)
-        self.log_underrep_pvals = np.log10(self.underrep_pvals)
+        self.log_overrep_pvals = np.log10(self.overrep_pvals + 1e-8)
+        self.log_underrep_pvals = np.log10(self.underrep_pvals + 1e-8)
         self.graphical_ar = np.minimum(self.log_overrep_pvals, self.log_underrep_pvals)
         self.graphical_ar[self.log_overrep_pvals < self.log_underrep_pvals] *= -1  # make overrepresented positive
         n_bins = self.graphical_ar.shape[1]
