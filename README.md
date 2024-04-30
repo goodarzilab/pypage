@@ -82,11 +82,12 @@ First, load the relevant gene-set annotation:
 ```python3
 from pypage import GeneSets
 
-def load_annotation(ann_file):
-    gs_ann = GeneSets(ann_file=ann_file, n_bins=3)
+def load_annotation(ann_file, first_col_is_genes=False):
+    gs_ann = GeneSets(ann_file=ann_file, n_bins=3, first_col_is_genes=first_col_is_genes)
     return gs_ann
 
 ```
+Make sure to check whether the first column in the annotation corresponds to genes or gene-set names.
 
 Next, load the expression data and convert gene names to the same format as the one used in the annotation:
 
@@ -122,7 +123,6 @@ def run_pyPAGE(expression, annotation):
         filter_redundant=True
     )
     results, hm = p.run()
-    hm.convert_from_to('gs', 'ensg', 'human')
     hm.show(show_reg=True)
     
     return results
