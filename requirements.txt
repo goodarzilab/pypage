@@ -1,0 +1,8 @@
+numpy
+pandas
+numba
+tqdm
+scipy
+pytest
+pybiomart
+matplotlib
