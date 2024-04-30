@@ -13,15 +13,7 @@ setup(
    url='https://github.com/goodarzilab/pypage',
    author_email="logic2000.bakulin@gmail.com",
    packages=['pypage', 'pypage.io'],
-   install_requires=[
-       'numpy',
-       'pandas',
-       'numba',
-       'tqdm',
-       'scipy',
-       "pytest",
-       "pybiomart",
-       "matplotlib"],
+   install_requires=open('requirements.txt').read().split(),
    classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
