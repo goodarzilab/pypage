@@ -2,7 +2,7 @@
 """
 
 
-import sys
+import warnings
 import numpy as np
 from typing import Optional
 from .accession_types import change_accessions
@@ -57,7 +57,6 @@ class GeneSets:
         pathways: np.ndarray
             an array associated pathways
         """
-        self.modified = False
         if ann_file:
             self._read_annotation_file(ann_file, first_col_is_genes)
         else:
@@ -86,42 +85,38 @@ class GeneSets:
          pd.DataFrame
              a dataframe in a long format
          """
-        if ann_file[-2:] == 'gz':
-            f = gzip.open(ann_file, 'r')
-        else:
-            f = open(ann_file)
+        is_gz = ann_file.endswith('.gz')
 
         row_names = []
         column_names = set()
-        for line in f:
-            if ann_file[-2:] == 'gz':
-                line = line.decode('ASCII')
-            els = line.rstrip().split('\t')
-            row_names.append(els[0])
-            els.pop(0)
-            if 'http://' in els[0]:
+        opener = gzip.open(ann_file, 'r') if is_gz else open(ann_file)
+        with opener as f:
+            for line in f:
+                if is_gz:
+                    line = line.decode('ASCII')
+                els = line.rstrip().split('\t')
+                row_names.append(els[0])
                 els.pop(0)
-            column_names |= set(els)
+                if 'http://' in els[0]:
+                    els.pop(0)
+                column_names |= set(els)
         column_names = list(column_names)
 
         positions = dict(zip(column_names, np.arange(len(column_names))))
         db_profiles = np.zeros((len(row_names), len(column_names)), dtype=int)
 
-        if ann_file[-2:] == 'gz':
-            f = gzip.open(ann_file, 'r')
-        else:
-            f = open(ann_file)
-
-        i = 0
-        for line in f:
-            if ann_file[-2:] == 'gz':
-                line = line.decode('ASCII')
-            els = line.rstrip().split('\t')[1:]
-            if 'http://' in els[0]:
-                els.pop(0)
-            indices = [positions[el] for el in els]
-            db_profiles[i, indices] = 1
-            i += 1
+        opener = gzip.open(ann_file, 'r') if is_gz else open(ann_file)
+        with opener as f:
+            i = 0
+            for line in f:
+                if is_gz:
+                    line = line.decode('ASCII')
+                els = line.rstrip().split('\t')[1:]
+                if 'http://' in els[0]:
+                    els.pop(0)
+                indices = [positions[el] for el in els]
+                db_profiles[i, indices] = 1
+                i += 1
 
         if first_col_is_genes:
             db_profiles = db_profiles.T
@@ -142,12 +137,12 @@ class GeneSets:
             y: np.ndarray):
         """validates inputs are as expected
         """
-        assert x.size > 0, \
-            "provided array must not be empty"
-        assert x.size == y.size, \
-            "genes and pathway arrays must be equal sized"
-        assert x.shape == y.shape, \
-            "genes and pathway arrays must be equally shaped"
+        if x.size == 0:
+            raise ValueError("provided array must not be empty")
+        if x.size != y.size:
+            raise ValueError("genes and pathway arrays must be equal sized")
+        if x.shape != y.shape:
+            raise ValueError("genes and pathway arrays must be equally shaped")
 
     def _load_genes(
             self,
@@ -242,9 +237,12 @@ class GeneSets:
         np.ndarray
             the bool_array subsetted to the indices of the `gene_subset`
         """
-        idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
+        gene_to_idx = {g: i for i, g in enumerate(self.genes)}
+        missing = [g for g in gene_subset if g not in gene_to_idx]
+        if missing:
+            raise ValueError(f"Genes not found in gene sets: {missing[:5]}")
+        idxs = [gene_to_idx[gene] for gene in gene_subset]
         self.sub_bool_array = self.bool_array[:, idxs]
-        self.modified = True
         return self.sub_bool_array
 
     def get_membership_subset(
@@ -264,7 +262,11 @@ class GeneSets:
         np.ndarray
             the bool_array subsetted to the indices of the `gene_subset`
         """
-        idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
+        gene_to_idx = {g: i for i, g in enumerate(self.genes)}
+        missing = [g for g in gene_subset if g not in gene_to_idx]
+        if missing:
+            raise ValueError(f"Genes not found in gene sets: {missing[:5]}")
+        idxs = [gene_to_idx[gene] for gene in gene_subset]
         sub_membership = self.membership[idxs]
         sub_membership_binned = self._build_bin_split(sub_membership, self.n_bins)
         return sub_membership_binned
@@ -284,14 +286,16 @@ class GeneSets:
             the maximum size of the pathways, default to current maximum
         """
         if not min_size and not max_size:
-            print("No minimum or maximum size provided. Doing nothing.", file=sys.stderr)
+            warnings.warn("No minimum or maximum size provided. Doing nothing.")
             return
         if not min_size:
             min_size = 0
         if not max_size:
             max_size = np.max(self.pathway_sizes)
-        assert min_size >= 0, "Provided minimum must be >= 0"
-        assert max_size > min_size, f"Provided maximum must be > min_size: {min_size}"
+        if min_size < 0:
+            raise ValueError("Provided minimum must be >= 0")
+        if max_size <= min_size:
+            raise ValueError(f"Provided maximum must be > min_size: {min_size}")
 
         # determine pathway-level mask
         p_mask = (self.pathway_sizes >= min_size) & (self.pathway_sizes <= max_size)
@@ -329,9 +333,6 @@ class GeneSets:
                                        input_format,
                                        output_format,
                                        species)
-
-    def reset(self):
-        self.modified = False
 
     def __repr__(self) -> str:
         """

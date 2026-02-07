@@ -1,3 +1,5 @@
+import warnings
+
 import pybiomart
 import numpy as np
 
@@ -44,7 +46,7 @@ def change_accessions(ids: np.ndarray,
             if input_format == 'entrez' or output_format == 'entrez':
                 df1['NCBI gene ID'] = df1['NCBI gene ID'].apply(lambda x: '%.f' % x)
             if input_format == 'gene_symbol' or output_format == 'gene_symbol':
-                upper = lambda x: x.upper() if type(x) == str else x
+                upper = lambda x: x.upper() if isinstance(x, str) else x
                 df1['NCBI gene accession'] = df1['NCBI gene accession'].apply(upper)
             input_to_output = {**input_to_output, **dict(zip(df1.iloc[:, 0], df1.iloc[:, 1]))}
 
@@ -53,5 +55,6 @@ def change_accessions(ids: np.ndarray,
             if id_ in input_to_output.keys():
                 new_ids.append(input_to_output[id_])
             else:
+                warnings.warn(f"Could not convert gene ID: {id_}")
                 new_ids.append('-')
         return np.array(new_ids)

@@ -51,7 +51,7 @@ def test_load_ontology_assertion():
 
         try:
             ont = GeneSets(genes, pathways)
-        except AssertionError:
+        except ValueError:
             continue
 
         assert False
@@ -113,7 +113,7 @@ def test_ontology_min_assertion():
 
         try:
             ont.filter_pathways(min_size = -1)
-        except AssertionError:
+        except ValueError:
             continue
 
         assert False
@@ -126,7 +126,7 @@ def test_ontology_max_assertion():
 
         try:
             ont.filter_pathways(min_size = 10, max_size=5)
-        except AssertionError:
+        except ValueError:
             continue
 
         assert False

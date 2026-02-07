@@ -77,6 +77,7 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+.pybiomart.sqlite
 
 # IPython
 profile_default/

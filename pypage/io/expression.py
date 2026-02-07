@@ -56,7 +56,6 @@ class ExpressionProfile:
             whether the provided dataframe is prebinned.
         n_bins: int
         """
-        self.modified = False
         self._is_bin = is_bin
         self._validate_inputs(genes, expression)
         self._process_input(genes, expression)
@@ -92,10 +91,10 @@ class ExpressionProfile:
             y: np.ndarray):
         """validates inputs are as expected
         """
-        assert x.size > 0, \
-            "provided array must not be empty"
-        assert x.shape[0] == y.shape[-1], \
-            "genes and expression/bin arrays must be equally shaped"
+        if x.size == 0:
+            raise ValueError("provided array must not be empty")
+        if x.shape[0] != y.shape[-1]:
+            raise ValueError("genes and expression/bin arrays must be equally shaped")
 
     def _discretize(self,
                     inp_array: np.ndarray,
@@ -143,7 +142,11 @@ class ExpressionProfile:
             the bin_array subsetted to the indices of the `gene_subset`
         """
 
-        idxs = [np.where(self.genes == gene)[0][0] for gene in gene_subset]
+        gene_to_idx = {g: i for i, g in enumerate(self.genes)}
+        missing = [g for g in gene_subset if g not in gene_to_idx]
+        if missing:
+            raise ValueError(f"Genes not found in expression profile: {missing[:5]}")
+        idxs = [gene_to_idx[gene] for gene in gene_subset]
 
         if len(self.raw_expression.shape) == 1:
             sub_expression = self.raw_expression[idxs]
@@ -159,7 +162,6 @@ class ExpressionProfile:
                 bin_array = np.apply_along_axis(lambda x: self._discretize(x, self.n_bins), 0, sub_expression)
 
         self.bin_array = bin_array
-        self.modified = True
         return self.bin_array
 
     def convert_from_to(self,
@@ -183,9 +185,6 @@ class ExpressionProfile:
                                        input_format,
                                        output_format,
                                        species)
-
-    def reset(self):
-        self.modified = False
 
     def __repr__(
             self) -> str:

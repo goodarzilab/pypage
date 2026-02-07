@@ -502,5 +502,7 @@ def measure_redundancy(
             z_bins,
             base=base)
 
+    if mi <= 0:
+        return 0.0
     return cmi / mi
 

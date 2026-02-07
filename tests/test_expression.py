@@ -54,7 +54,7 @@ def test_load_expression_assertion():
 
         try:
             ont = ExpressionProfile(genes, expression)
-        except AssertionError:
+        except ValueError:
             continue
 
         assert False

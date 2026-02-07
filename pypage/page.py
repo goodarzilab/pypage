@@ -20,7 +20,7 @@ import numpy as np
 import numba as nb
 import pandas as pd
 from tqdm import tqdm
-from typing import Optional
+from typing import Optional, Tuple
 
 
 class PAGE:
@@ -95,7 +95,7 @@ class PAGE:
             self,
             expression: ExpressionProfile,
             genesets: GeneSets,
-            n_shuffle: int = 1e3,
+            n_shuffle: int = 1000,
             alpha: float = 1e-2,
             k: int = 10,
             filter_redundant: bool = False,
@@ -152,6 +152,18 @@ class PAGE:
         self._set_jobs()
         self.function = function
         self.redundancy_ratio = redundancy_ratio
+
+        # Validate parameters
+        if not (0 < self.alpha < 1):
+            raise ValueError(f"alpha must be in (0, 1), got {self.alpha}")
+        if self.k <= 0:
+            raise ValueError(f"k must be > 0, got {self.k}")
+        if self.n_shuffle <= 0:
+            raise ValueError(f"n_shuffle must be > 0, got {self.n_shuffle}")
+        if self.function not in ('mi', 'cmi'):
+            raise ValueError(f"function must be 'mi' or 'cmi', got {self.function!r}")
+        if self.redundancy_ratio is not None and self.redundancy_ratio <= 0:
+            raise ValueError(f"redundancy_ratio must be > 0, got {self.redundancy_ratio}")
 
         # Always refresh derived arrays for this PAGE instance.
         # Input objects may have been used in previous PAGE runs.
@@ -251,7 +263,7 @@ class PAGE:
 
         return information
 
-    def _calculate_enrichment(self) -> (np.ndarray, np.ndarray):
+    def _calculate_enrichment(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Iterates through informative pathways to calculate hypergeometric pvalues
         """
@@ -268,7 +280,7 @@ class PAGE:
 
         return overrep_pvals, underrep_pvals
 
-    def _calculate_informative(self) -> (np.ndarray, np.ndarray):
+    def _calculate_informative(self) -> Tuple[np.ndarray, np.ndarray]:
         """Calculates the informative categories
         """
         n_break = 0
@@ -389,7 +401,7 @@ class PAGE:
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
 
-    def run(self) -> (pd.DataFrame, Heatmap):
+    def run(self) -> Tuple[pd.DataFrame, Optional[Heatmap]]:
         """
         Perform the PAGE algorithm
 
@@ -407,7 +419,7 @@ class PAGE:
         # calculate mutual information
         if len(self.exp_bins.shape) == 2:
             self.information = self._calculate_information_2D()
-            return self.information
+            return self.information, None
 
         self.information = self._calculate_information()
 
@@ -431,8 +443,10 @@ class PAGE:
             return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"]), None
 
     def get_enriched_genes(self, name) -> list:
-        assert name in self.ontology.pathways, "pathway not present"
-        pathway_idx = np.where(self.ontology.pathways == name)[0][0]
+        matches = np.flatnonzero(self.ontology.pathways == name)
+        if matches.size == 0:
+            raise ValueError(f"pathway not present: {name!r}")
+        pathway_idx = matches[0]
         pathway_binary = self.ont_bool[pathway_idx]
         res = []
         for bin in set(self.exp_bins):
