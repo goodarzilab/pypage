@@ -112,12 +112,10 @@ Bakulin A, Teyssier NB, Kampmann M, Khoroshkin M, Goodarzi H (2024)
 PLoS Computational Biology 20(9): e1012346.  
 https://doi.org/10.1371/journal.pcbi.1012346
 
-Article: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1012346
-
 ## License
 
 MIT
 
 ## About
 
-pyPAGE was developed in the Goodarzi Lab at UCSF.
+pyPAGE was developed in the Goodarzi Lab at UCSF by Artemy Bakulin, Noam B. Teyssier, and Hani Goodarzi.
