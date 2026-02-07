@@ -153,10 +153,11 @@ class PAGE:
         self.function = function
         self.redundancy_ratio = redundancy_ratio
 
-        if not self.expression.modified and not self.ontology.modified:
-            self._intersect_genes()
-            self._subset_matrices()
-            self._set_sizes()
+        # Always refresh derived arrays for this PAGE instance.
+        # Input objects may have been used in previous PAGE runs.
+        self._intersect_genes()
+        self._subset_matrices()
+        self._set_sizes()
 
     def _set_jobs(self):
         """Sets the number of available jobs for numba parallel

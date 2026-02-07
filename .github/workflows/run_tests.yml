@@ -1,27 +1,50 @@
 name: Testing
 
-on: [push]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  linux-pip-install:
+  fast-tests:
     runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 1
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
 
     - name: Set up Python 3.8
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: 3.8
 
     - name: Install Package
       run: |
         pip install -e .
-    
-
-    - name: Pytest
-      run: |
         pip install pytest
-        pytest -v
+
+    - name: Pytest (Fast)
+      run: |
+        pytest -q -m "not slow and not online"
+
+  full-tests:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      PYPAGE_RUN_ONLINE_TESTS: "1"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.8
+
+    - name: Install Package
+      run: |
+        pip install -e .
+        pip install pytest
+
+    - name: Pytest (Full)
+      run: |
+        pytest -q

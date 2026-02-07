@@ -2,6 +2,8 @@
 """
 
 
+import os
+import pytest
 import numpy as np
 from pypage import GeneSets
 
@@ -9,6 +11,7 @@ from pypage import GeneSets
 N_GENES=1000
 N_PATHWAYS=50
 T=100
+RUN_ONLINE_TESTS = os.getenv("PYPAGE_RUN_ONLINE_TESTS") == "1"
 
 
 def get_ontology() -> (np.ndarray, np.ndarray):
@@ -131,10 +134,28 @@ def test_ontology_max_assertion():
 
 def test_read_annotation_file():
     ont = GeneSets(ann_file='example_data/hg38_cistrome_index.txt.gz')
-    return ont
+    assert ont.n_pathways > 0
+    assert ont.n_genes > 0
 
 
-def test_convert_from_to():
+def test_convert_from_to_offline(monkeypatch):
+    def fake_change_accessions(ids, input_format, output_format, species):
+        assert input_format == "ensg"
+        assert output_format == "gs"
+        assert species == "human"
+        return np.array([f"GS_{x}" for x in ids])
+
+    monkeypatch.setattr("pypage.io.ontology.change_accessions", fake_change_accessions)
+    ont = GeneSets(genes=np.array(["ENSG1.1", "ENSG2.2"]), pathways=np.array(["P1", "P2"]))
+    ont.convert_from_to("ensg", "gs", "human")
+    assert np.array_equal(ont.genes, np.array(["GS_ENSG1", "GS_ENSG2"]))
+
+
+@pytest.mark.skipif(
+    not RUN_ONLINE_TESTS,
+    reason="Requires network access to Ensembl. Set PYPAGE_RUN_ONLINE_TESTS=1 to enable.",
+)
+@pytest.mark.online
+def test_convert_from_to_online():
     ont = GeneSets(ann_file='example_data/hg38_cistrome_index.txt.gz')
     ont.convert_from_to('ensg', 'gs', 'human')
-    return ont

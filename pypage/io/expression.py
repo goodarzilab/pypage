@@ -147,10 +147,16 @@ class ExpressionProfile:
 
         if len(self.raw_expression.shape) == 1:
             sub_expression = self.raw_expression[idxs]
-            bin_array = self._discretize(sub_expression, self.n_bins)
+            if self._is_bin:
+                bin_array = sub_expression.astype(np.int32)
+            else:
+                bin_array = self._discretize(sub_expression, self.n_bins)
         else:
             sub_expression = self.raw_expression[:, idxs]
-            bin_array = np.apply_along_axis(lambda x: self._discretize(x, self.n_bins), 0, sub_expression)
+            if self._is_bin:
+                bin_array = sub_expression.astype(np.int32)
+            else:
+                bin_array = np.apply_along_axis(lambda x: self._discretize(x, self.n_bins), 0, sub_expression)
 
         self.bin_array = bin_array
         self.modified = True

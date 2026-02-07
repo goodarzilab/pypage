@@ -2,11 +2,21 @@
 """
 
 import pytest
+import os
 import pandas as pd
 from pypage import (
     PAGE,
     ExpressionProfile,
     GeneSets)
+
+RUN_ONLINE_TESTS = os.getenv("PYPAGE_RUN_ONLINE_TESTS") == "1"
+pytestmark = [
+    pytest.mark.online,
+    pytest.mark.skipif(
+        not RUN_ONLINE_TESTS,
+        reason="Requires network access to Ensembl. Set PYPAGE_RUN_ONLINE_TESTS=1 to enable.",
+    ),
+]
 
 
 @pytest.fixture()

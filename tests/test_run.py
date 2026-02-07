@@ -42,3 +42,19 @@ def test_run(load_expression, load_ontology):
         k=2)
     results = p.run()
 
+
+def test_run_reuse_inputs(load_expression, load_ontology):
+    p1 = PAGE(
+        load_expression,
+        load_ontology,
+        n_shuffle=2,
+        k=1)
+    p1.run()
+
+    p2 = PAGE(
+        load_expression,
+        load_ontology,
+        n_shuffle=2,
+        k=1)
+    results = p2.run()
+    assert isinstance(results, tuple)

@@ -3,6 +3,7 @@
 
 import pytest
 import pandas as pd
+import numpy as np
 from pypage import (
     PAGE,
     ExpressionProfile,
@@ -26,13 +27,16 @@ def load_ontology():
     return ont
 
 
+@pytest.mark.slow
 def test_run(load_expression, load_ontology):
+    np.random.seed(0)
     p = PAGE(
         load_expression,
         load_ontology,
         n_shuffle=100,
         k=10,
-        alpha=0.01)
+        alpha=0.01,
+        n_jobs=1)
     results, hm = p.run()
 
     positive = set(['upregulated_' + str(i) for i in range(50)] + ['downregulated_' + str(i) for i in range(50)])
