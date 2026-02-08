@@ -229,7 +229,7 @@ from pypage import GeneSets, SingleCellPAGE
 adata = anndata.read_h5ad("my_data.h5ad")
 gs = GeneSets(ann_file="annotations.txt.gz")
 
-sc = SingleCellPAGE(adata=adata, genesets=gs, function='cmi')
+sc = SingleCellPAGE(adata=adata, genesets=gs, function='cmi', n_jobs=4)
 results = sc.run(n_permutations=1000)
 
 print(results.head())
@@ -287,6 +287,7 @@ summary, group_results = sc.run_neighborhoods(labels=adata.obs['leiden'])
 | `n_bins` | `10` | Number of bins for expression discretization |
 | `n_neighbors` | `ceil(sqrt(n_cells))` | KNN neighbors (capped at 100) |
 | `connectivity` | `None` | Precomputed cell-cell connectivity matrix |
+| `n_jobs` | `1` | Number of parallel threads (0 or None for all available) |
 
 ### GeneMapper
 

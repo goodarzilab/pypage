@@ -611,3 +611,92 @@ def batch_conditional_mutual_information(
             x_bins, y_bins, z_bins, base)
     return result
 
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    parallel=True)
+def batch_mutual_information_2d(
+        exp_bins_2d: np.ndarray,
+        ont_bool: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2) -> np.ndarray:
+    """Calculates mutual information for all (cell, pathway) pairs in parallel.
+
+    Parameters
+    ----------
+    exp_bins_2d : np.ndarray
+        2D array of expression bin indices (n_cells, n_genes)
+    ont_bool : np.ndarray
+        2D boolean/int array of pathway memberships (n_pathways, n_genes)
+    x_bins : int
+        the number of expression bins
+    y_bins : int
+        the number of ontology bins (typically 2)
+    base : int
+        the base of the logarithm
+
+    Returns
+    -------
+    np.ndarray
+        MI values for each (cell, pathway) pair (n_cells, n_pathways)
+    """
+    n_cells = exp_bins_2d.shape[0]
+    n_pathways = ont_bool.shape[0]
+    result = np.zeros((n_cells, n_pathways))
+    for c in nb.prange(n_cells):
+        for p in range(n_pathways):
+            result[c, p] = mutual_information(
+                exp_bins_2d[c], ont_bool[p], x_bins, y_bins, base)
+    return result
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    parallel=True)
+def batch_conditional_mutual_information_2d(
+        exp_bins_2d: np.ndarray,
+        ont_bool: np.ndarray,
+        membership_bins: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
+        base: int = 2) -> np.ndarray:
+    """Calculates conditional mutual information for all (cell, pathway) pairs in parallel.
+
+    Parameters
+    ----------
+    exp_bins_2d : np.ndarray
+        2D array of expression bin indices (n_cells, n_genes)
+    ont_bool : np.ndarray
+        2D boolean/int array of pathway memberships (n_pathways, n_genes)
+    membership_bins : np.ndarray
+        1D array of membership bin indices (n_genes,)
+    x_bins : int
+        the number of expression bins
+    y_bins : int
+        the number of ontology bins (typically 2)
+    z_bins : int
+        the number of membership bins
+    base : int
+        the base of the logarithm
+
+    Returns
+    -------
+    np.ndarray
+        CMI values for each (cell, pathway) pair (n_cells, n_pathways)
+    """
+    n_cells = exp_bins_2d.shape[0]
+    n_pathways = ont_bool.shape[0]
+    result = np.zeros((n_cells, n_pathways))
+    for c in nb.prange(n_cells):
+        for p in range(n_pathways):
+            result[c, p] = conditional_mutual_information(
+                exp_bins_2d[c], ont_bool[p], membership_bins,
+                x_bins, y_bins, z_bins, base)
+    return result
+

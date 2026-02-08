@@ -7,6 +7,7 @@ KNN graph, and optionally running standard PAGE on neighborhood aggregates.
 
 import math
 import numpy as np
+import numba as nb
 import pandas as pd
 from tqdm import tqdm
 from scipy.sparse import issparse, csr_matrix
@@ -14,7 +15,10 @@ from typing import Optional, Tuple
 
 from .io import GeneSets, ExpressionProfile
 from .page import PAGE
-from .information import mutual_information, conditional_mutual_information
+from .information import (
+    mutual_information, conditional_mutual_information,
+    batch_mutual_information_2d, batch_conditional_mutual_information_2d,
+)
 from .spatial import geary_c, geary_c_batch, build_knn_graph
 from .utils import benjamini_hochberg
 
@@ -47,6 +51,9 @@ class SingleCellPAGE:
         Precomputed cell-cell connectivity matrix.
     function : str, optional
         'mi' or 'cmi'. Default: 'cmi'.
+    n_jobs : int, optional
+        Number of threads for Numba parallel execution. Default: 1.
+        Set to 0 or None to use all available threads.
     """
 
     def __init__(
@@ -59,6 +66,7 @@ class SingleCellPAGE:
         n_bins=10,
         connectivity=None,
         function='cmi',
+        n_jobs=1,
     ):
         if genesets is None:
             raise ValueError("genesets is required")
@@ -68,6 +76,7 @@ class SingleCellPAGE:
         self.genesets = genesets
         self.n_bins = n_bins
         self.function = function
+        self.n_jobs = n_jobs
         self.embeddings = {}
 
         if adata is not None:
@@ -157,6 +166,14 @@ class SingleCellPAGE:
         self.pathway_names = self.genesets.pathways.copy()
         self.n_pathways = self.ont_bool.shape[0]
 
+    def _set_jobs(self):
+        """Set the number of threads for Numba parallel execution."""
+        if self.n_jobs:
+            self.n_jobs = int(self.n_jobs)
+            nb.set_num_threads(self.n_jobs)
+        else:
+            nb.set_num_threads(nb.config.NUMBA_NUM_THREADS)
+
     def _build_knn_graph(self):
         """Build or use precomputed KNN graph."""
         if self.connectivity is not None:
@@ -180,7 +197,6 @@ class SingleCellPAGE:
             Shape (n_cells, n_pathways) with information scores.
         """
         expr_subset = self.expression_matrix[:, self._expr_idxs]
-        n_shared = len(self.shared_genes)
 
         # Create ExpressionProfile for 2D data to handle discretization
         ep = ExpressionProfile(
@@ -193,28 +209,19 @@ class SingleCellPAGE:
 
         x_bins = int(exp_bins.max()) + 1
         y_bins = int(self.ont_bool.max()) + 1
-        z_bins = int(self.membership_bins.max()) + 1
 
-        scores = np.zeros((self.n_cells, self.n_pathways))
+        exp_bins_i32 = exp_bins.astype(np.int32)
+        ont_bool_i32 = self.ont_bool.astype(np.int32)
 
-        desc = f"scoring pathways ({'cmi' if self.function == 'cmi' else 'mi'})"
-        for cell_idx in tqdm(range(self.n_cells), desc=desc):
-            cell_bins = exp_bins[cell_idx].astype(np.int32)
-            for p_idx in range(self.n_pathways):
-                pathway_bool = self.ont_bool[p_idx].astype(np.int32)
-                if self.function == 'mi':
-                    scores[cell_idx, p_idx] = mutual_information(
-                        cell_bins, pathway_bool, x_bins, y_bins
-                    )
-                else:
-                    scores[cell_idx, p_idx] = conditional_mutual_information(
-                        cell_bins,
-                        pathway_bool,
-                        self.membership_bins.astype(np.int32),
-                        x_bins, y_bins, z_bins,
-                    )
-
-        return scores
+        if self.function == 'mi':
+            return batch_mutual_information_2d(
+                exp_bins_i32, ont_bool_i32, x_bins, y_bins)
+        else:
+            z_bins = int(self.membership_bins.max()) + 1
+            return batch_conditional_mutual_information_2d(
+                exp_bins_i32, ont_bool_i32,
+                self.membership_bins.astype(np.int32),
+                x_bins, y_bins, z_bins)
 
     def _compute_geary_c(self, scores):
         """Compute Geary's C' for each pathway.
@@ -276,6 +283,8 @@ class SingleCellPAGE:
         z_bins = int(self.membership_bins.max()) + 1
         membership = self.membership_bins.astype(np.int32)
 
+        exp_bins_i32 = exp_bins.astype(np.int32)
+
         W_indices = self.W.indices.astype(np.int64)
         W_indptr = self.W.indptr.astype(np.int64)
         W_data = self.W.data.astype(np.float64)
@@ -284,31 +293,24 @@ class SingleCellPAGE:
             size = int(size)
             pw_idxs = size_to_pathways[size]
 
-            # Generate null distribution for this size
-            null_c_primes = np.zeros(n_permutations)
+            # Generate all random gene sets at once: (n_permutations, n_shared)
+            rand_bools = np.zeros((n_permutations, n_shared), dtype=np.int32)
             for perm in range(n_permutations):
-                # Random gene set of this size
-                rand_genes = np.random.choice(n_shared, size=size, replace=False)
-                rand_bool = np.zeros(n_shared, dtype=np.int32)
-                rand_bool[rand_genes] = 1
+                genes = np.random.choice(n_shared, size=size, replace=False)
+                rand_bools[perm, genes] = 1
 
-                # Score each cell for random gene set
-                rand_scores = np.zeros(self.n_cells)
-                for cell_idx in range(self.n_cells):
-                    cell_bins = exp_bins[cell_idx].astype(np.int32)
-                    if self.function == 'mi':
-                        rand_scores[cell_idx] = mutual_information(
-                            cell_bins, rand_bool, x_bins, y_bins
-                        )
-                    else:
-                        rand_scores[cell_idx] = conditional_mutual_information(
-                            cell_bins, rand_bool, membership,
-                            x_bins, y_bins, z_bins,
-                        )
+            # One batch JIT call: (n_cells, n_permutations) score matrix
+            if self.function == 'mi':
+                rand_scores = batch_mutual_information_2d(
+                    exp_bins_i32, rand_bools, x_bins, y_bins)
+            else:
+                rand_scores = batch_conditional_mutual_information_2d(
+                    exp_bins_i32, rand_bools, membership,
+                    x_bins, y_bins, z_bins)
 
-                null_c_primes[perm] = geary_c(
-                    rand_scores, W_indices, W_indptr, W_data, self.n_cells
-                )
+            # Batch Geary's C for all permutations
+            null_c_primes = geary_c_batch(
+                rand_scores, W_indices, W_indptr, W_data, self.n_cells)
 
             # Compute p-values for all pathways of this size
             for p_idx in pw_idxs:
@@ -336,6 +338,7 @@ class SingleCellPAGE:
         pd.DataFrame
             Results with columns: pathway, consistency, p-value, FDR.
         """
+        self._set_jobs()
         self._build_knn_graph()
         self.scores = self._score_pathways()
         self.consistency = self._compute_geary_c(self.scores)
