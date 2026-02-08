@@ -15,7 +15,10 @@ setup(
    packages=['pypage', 'pypage.io'],
    install_requires=open('requirements.txt').read().split(),
    entry_points={
-        'console_scripts': ['pypage=pypage.cli:main'],
+        'console_scripts': [
+            'pypage=pypage.cli:main',
+            'pypage-sc=pypage.cli_sc:main',
+        ],
    },
    classifiers=[
         "Programming Language :: Python :: 3",

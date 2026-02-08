@@ -148,6 +148,10 @@ pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
 pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
     --manual "apoptotic process,cell cycle"
 
+# Manual mode from file (one pathway per line)
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+    --manual pathways_of_interest.txt
+
 # With index-format gene sets
 pypage -e expr.tab.gz -g index_annotations.txt.gz --is-bin
 
@@ -156,6 +160,29 @@ pypage -e expr.tab.gz --gmt pathways.gmt --seed 42
 ```
 
 Run `pypage --help` for a full list of options.
+
+## Single-Cell Command Line
+
+After installation, `pypage-sc` is available for single-cell PAGE analysis:
+
+```bash
+# With AnnData h5ad file
+pypage-sc --adata data.h5ad --gmt pathways.gmt -o results.tsv
+
+# With expression matrix + gene names
+pypage-sc --expression matrix.tsv --genes genes.txt --genesets-long ann.txt.gz
+
+# Full options
+pypage-sc --adata data.h5ad --gmt pathways.gmt \
+    --n-permutations 1000 --n-neighbors 30 --n-jobs 4 \
+    -o results.tsv --scores scores.tsv
+
+# Manual mode (bypass permutation testing)
+pypage-sc --adata data.h5ad --gmt pathways.gmt \
+    --manual "apoptotic process,cell cycle" -o manual_results.tsv
+```
+
+Run `pypage-sc --help` for a full list of options.
 
 ## Bulk PAGE Analysis
 

@@ -322,6 +322,46 @@ class SingleCellPAGE:
 
         return pvalues
 
+    def run_manual(self, pathway_names):
+        """Score specific pathways without permutation testing.
+
+        Parameters
+        ----------
+        pathway_names : list of str
+            Pathway names to analyze. Must exist in gene set annotations.
+
+        Returns
+        -------
+        pd.DataFrame
+            Results with columns: pathway, consistency, p-value (NaN), FDR (NaN).
+        """
+        unknown = [n for n in pathway_names if n not in self.pathway_names]
+        if unknown:
+            raise ValueError(f"Unknown pathway(s): {unknown}")
+
+        pathway_indices = np.array([
+            int(np.flatnonzero(self.pathway_names == name)[0])
+            for name in pathway_names
+        ])
+
+        self._set_jobs()
+        self._build_knn_graph()
+
+        all_scores = self._score_pathways()
+        self.scores = all_scores[:, pathway_indices]
+        self.consistency = self._compute_geary_c(self.scores)
+        self.pvalues = np.full(len(pathway_indices), np.nan)
+        self.fdr = np.full(len(pathway_indices), np.nan)
+
+        self.results = pd.DataFrame({
+            'pathway': [self.pathway_names[i] for i in pathway_indices],
+            'consistency': self.consistency,
+            'p-value': self.pvalues,
+            'FDR': self.fdr,
+        }).sort_values('consistency', ascending=False).reset_index(drop=True)
+
+        return self.results
+
     def run(self, n_permutations=1000):
         """Run the single-cell PAGE analysis.
 

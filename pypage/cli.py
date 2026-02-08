@@ -15,6 +15,15 @@ from .io import ExpressionProfile, GeneSets
 from .page import PAGE
 
 
+def _parse_manual(value):
+    """Parse --manual value as either a file path or comma-separated string."""
+    import os
+    if os.path.isfile(value):
+        with open(value) as f:
+            return [line.strip() for line in f if line.strip()]
+    return [s.strip() for s in value.split(",")]
+
+
 def _build_parser():
     parser = argparse.ArgumentParser(
         prog="pypage",
@@ -97,7 +106,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--manual", default=None,
-        help="Comma-separated pathway names (bypass significance testing)",
+        help="Pathway names: comma-separated or a file (one per line). Bypasses significance testing.",
     )
     parser.add_argument(
         "--killed", default=None,
@@ -155,7 +164,7 @@ def main(argv=None):
     )
 
     if args.manual is not None:
-        pathway_names = [s.strip() for s in args.manual.split(",")]
+        pathway_names = _parse_manual(args.manual)
         results, heatmap = p.run_manual(pathway_names)
     else:
         results, heatmap = p.run()
