@@ -29,6 +29,67 @@ or a binary matrix encoding gene membership.
         number of bins to use when binning membership array
 ```
 
+#### GeneSets.from_gmt
+
+```python3
+@classmethod
+GeneSets.from_gmt(gmt_file: str,
+                  n_bins: int = 3,
+                  min_size: Optional[int] = None,
+                  max_size: Optional[int] = None) -> GeneSets
+```
+
+Load gene sets from a GMT file (e.g., MSigDB). Supports plain `.gmt` and gzipped `.gmt.gz` files.
+
+```
+    gmt_file: str
+        Path to .gmt or .gmt.gz file.
+    n_bins: int
+        Number of bins for membership binning (default: 3).
+    min_size: int, optional
+        Minimum pathway size. Pathways with fewer genes are removed after loading.
+    max_size: int, optional
+        Maximum pathway size. Pathways with more genes are removed after loading.
+```
+
+After loading, pathway descriptions from the GMT file are available via the `descriptions` attribute (dict mapping pathway name to description string).
+
+#### GeneSets.to_gmt
+
+```python3
+GeneSets.to_gmt(output_file: str,
+                descriptions: Optional[dict] = None)
+```
+
+Export gene sets to GMT format.
+
+```
+    output_file: str
+        Path to output .gmt or .gmt.gz file.
+    descriptions: dict, optional
+        Mapping of pathway name to description string.
+        Falls back to self.descriptions if available, otherwise 'na'.
+```
+
+#### GeneSets.map_genes
+
+```python3
+GeneSets.map_genes(mapper: GeneMapper,
+                   from_type: str = 'ensg',
+                   to_type: str = 'symbol')
+```
+
+Convert gene IDs in-place using a GeneMapper instance. Genes that cannot be mapped are dropped. Updates `self.genes`, `self.bool_array`, and `self.membership` in place. Pathways that become empty after dropping genes are also removed.
+
+```
+    mapper: GeneMapper
+        A GeneMapper instance with a cached mapping table.
+    from_type: str
+        Source ID type: 'ensg', 'symbol', or 'entrez'.
+    to_type: str
+        Target ID type: 'ensg', 'symbol', or 'entrez'.
+```
+
 #### GeneSets.convert_from_to
 
 ```python3
@@ -243,9 +304,78 @@ Heatmap.add_gene_expression(genes: np.ndarray,
 This function should be used if you want to visualize the expression of the regulators in cases when it is not contained in PAGE object. 
 For example, when PAGE is run to identify RBP regulons using differential stability and you want to add RBP expression to the heatmap output.
 
-``` 
+```
 genes: np.ndarray
     Array of gene names
 expression: np.ndarray
     Array of differential expression values.
 ```
+
+## pypage.GeneMapper
+
+```python3
+class pypage.GeneMapper(species: str = 'human',
+                         cache_dir: Optional[str] = None)
+```
+
+Offline gene ID conversion using a locally cached mapping table. On first instantiation, downloads a mapping table from Ensembl BioMart (~5 MB) and caches it locally. Subsequent instantiations load from cache with no network required.
+
+Supported ID types: `'ensg'` (Ensembl gene IDs), `'symbol'` (gene symbols), `'entrez'` (Entrez gene IDs).
+
+```
+    species: str
+        Species to use: 'human' or 'mouse'.
+    cache_dir: str, optional
+        Directory for the cache file. Defaults to ~/.pypage/.
+```
+
+#### GeneMapper.convert
+
+```python3
+GeneMapper.convert(ids: array-like,
+                   from_type: str = 'ensg',
+                   to_type: str = 'symbol') -> (np.ndarray, dict)
+```
+
+Convert gene IDs using the cached mapping table.
+
+```
+    ids: array-like
+        Gene IDs to convert.
+    from_type: str
+        Source ID type: 'ensg', 'symbol', or 'entrez'.
+    to_type: str
+        Target ID type: 'ensg', 'symbol', or 'entrez'.
+
+    Returns:
+        np.ndarray: Converted IDs. Unmapped entries are set to None.
+        dict: Mapping of input IDs that failed to convert (input_id -> None).
+```
+
+Versioned Ensembl IDs (e.g., `ENSG00000141510.15`) are automatically stripped of the version suffix when `from_type='ensg'`.
+
+#### GeneMapper.build
+
+```python3
+@staticmethod
+GeneMapper.build(species: str = 'human',
+                 cache_dir: Optional[str] = None)
+```
+
+Force (re)download the mapping table from Ensembl BioMart. Requires `pybiomart` and network access.
+
+```
+    species: str
+        Species to use: 'human' or 'mouse'.
+    cache_dir: str, optional
+        Directory for the cache file. Defaults to ~/.pypage/.
+```
+
+#### GeneMapper.cache_path
+
+```python3
+@property
+GeneMapper.cache_path -> str
+```
+
+Path to the cached mapping file (e.g., `~/.pypage/gene_map_human.tsv`).

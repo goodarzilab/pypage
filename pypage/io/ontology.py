@@ -312,6 +312,131 @@ class GeneSets:
         self.bool_array = self.bool_array[:, g_mask]
         self.genes = self.genes[g_mask]
 
+    @classmethod
+    def from_gmt(cls, gmt_file, n_bins=3, min_size=None, max_size=None):
+        """Load gene sets from a GMT file (e.g., MSigDB).
+
+        Parameters
+        ----------
+        gmt_file : str
+            Path to .gmt or .gmt.gz file.
+        n_bins : int
+            Number of bins for membership binning (default: 3).
+        min_size : int, optional
+            Minimum pathway size (filter after loading).
+        max_size : int, optional
+            Maximum pathway size (filter after loading).
+
+        Returns
+        -------
+        GeneSets
+        """
+        is_gz = gmt_file.endswith('.gz')
+        opener = gzip.open(gmt_file, 'rt') if is_gz else open(gmt_file)
+
+        genes_list = []
+        pathways_list = []
+        descriptions = {}
+
+        with opener as f:
+            for line in f:
+                parts = line.rstrip('\n\r').split('\t')
+                if len(parts) < 3:
+                    continue
+                pathway_name = parts[0]
+                description = parts[1]
+                gene_names = [g for g in parts[2:] if g]
+
+                if not gene_names:
+                    continue
+
+                descriptions[pathway_name] = description
+                for gene in gene_names:
+                    genes_list.append(gene)
+                    pathways_list.append(pathway_name)
+
+        obj = cls(
+            genes=np.array(genes_list),
+            pathways=np.array(pathways_list),
+            n_bins=n_bins,
+        )
+        obj.descriptions = descriptions
+
+        if min_size is not None or max_size is not None:
+            kwargs = {}
+            if min_size is not None:
+                kwargs['min_size'] = min_size
+            if max_size is not None:
+                kwargs['max_size'] = max_size
+            obj.filter_pathways(**kwargs)
+
+        return obj
+
+    def to_gmt(self, output_file, descriptions=None):
+        """Export gene sets to GMT format.
+
+        Parameters
+        ----------
+        output_file : str
+            Path to output .gmt or .gmt.gz file.
+        descriptions : dict, optional
+            Mapping of pathway name to description string.
+            Falls back to self.descriptions if available, otherwise 'na'.
+        """
+        if descriptions is None:
+            descriptions = getattr(self, 'descriptions', {})
+
+        is_gz = output_file.endswith('.gz')
+        opener = gzip.open(output_file, 'wt') if is_gz else open(output_file, 'w')
+
+        with opener as f:
+            for i, pathway in enumerate(self.pathways):
+                gene_mask = self.bool_array[i] > 0
+                pathway_genes = self.genes[gene_mask]
+                desc = descriptions.get(pathway, 'na')
+                line = '\t'.join([pathway, desc] + list(pathway_genes))
+                f.write(line + '\n')
+
+    def map_genes(self, mapper, from_type='ensg', to_type='symbol'):
+        """Convert gene IDs using a GeneMapper.
+
+        Genes that can't be mapped are dropped. Updates self.genes,
+        self.bool_array, and self.membership in place.
+
+        Parameters
+        ----------
+        mapper : GeneMapper
+            A GeneMapper instance with a cached mapping table.
+        from_type : str
+            Source ID type ('ensg', 'symbol', or 'entrez').
+        to_type : str
+            Target ID type ('ensg', 'symbol', or 'entrez').
+        """
+        converted, unmapped = mapper.convert(self.genes, from_type=from_type, to_type=to_type)
+
+        # Build mask: keep genes that were successfully mapped
+        keep_mask = np.array([c is not None for c in converted])
+
+        if not np.any(keep_mask):
+            raise ValueError("No genes could be mapped. Check from_type and to_type.")
+
+        n_dropped = np.sum(~keep_mask)
+        if n_dropped > 0:
+            warnings.warn(f"Dropped {n_dropped} unmapped genes out of {len(self.genes)}.")
+
+        self.genes = np.array([c for c, k in zip(converted, keep_mask) if k])
+        self.bool_array = self.bool_array[:, keep_mask]
+        self.n_genes = len(self.genes)
+        self._make_membership_profile()
+
+        # Remove pathways that now have zero genes
+        pathway_sizes = self.bool_array.sum(axis=1)
+        p_mask = pathway_sizes > 0
+        if not np.all(p_mask):
+            self.bool_array = self.bool_array[p_mask]
+            self.pathways = self.pathways[p_mask]
+            self.n_pathways = len(self.pathways)
+
     def convert_from_to(self,
                         input_format: str,
                         output_format: str,
