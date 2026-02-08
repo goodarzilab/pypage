@@ -59,6 +59,33 @@ heatmap.show()
 - `p-value` — empirical p-value from permutation test
 - `Regulation pattern` (`1` for up, `-1` for down)
 
+## Tutorial: DESeq2 Log Fold-Change with Hallmark Gene Sets
+
+This example runs pyPAGE on DESeq2 differential expression results (log2 fold-change) against MSigDB Hallmark gene sets. The input file and GMT are included in `example_data/`.
+
+**Step 1 — Run pyPAGE:**
+
+```bash
+pypage -e example_data/test_DESeq_logFC.txt.gz \
+    --gmt example_data/h.all.v2026.1.Hs.symbols.gmt \
+    --cols GENE,log2FoldChange --seed 42
+```
+
+This creates `example_data/test_DESeq_logFC_PAGE/` with results, heatmap, and enrichment matrix.
+
+**Step 2 — Re-plot with custom color scale:**
+
+```bash
+pypage --draw-only -e example_data/test_DESeq_logFC.txt.gz \
+    --min-val -2 --max-val 3 --bar-min -1 --bar-max 1
+```
+
+`--draw-only` re-renders the heatmap from the saved matrix without re-running the analysis. `--min-val`/`--max-val` control the enrichment color scale; `--bar-min`/`--bar-max` normalize the bin-edge indicator bar.
+
+**Example output:**
+
+![pyPAGE heatmap](example_data/test_DESeq_logFC_PAGE/heatmap.png)
+
 ## Loading Gene Sets
 
 Gene sets can be loaded from multiple sources:
