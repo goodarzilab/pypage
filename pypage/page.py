@@ -283,12 +283,13 @@ class PAGE:
 
         return overrep_pvals, underrep_pvals
 
-    def _calculate_informative(self) -> Tuple[np.ndarray, np.ndarray]:
+    def _calculate_informative(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Calculates the informative categories
         """
         n_break = 0
         informative = np.zeros_like(self.information)
         pvalues = np.ones_like(self.information)
+        zscores = np.full_like(self.information, np.nan)
 
         # iterate through most informative pathways
         pbar = tqdm(np.argsort(self.information)[::-1], desc="permutation testing")
@@ -313,10 +314,16 @@ class PAGE:
                     n=self.n_shuffle)
 
             # calculate empirical pvalue against randomization
-
             pvalues[idx] = empirical_pvalue(
                 permutations,
                 self.information[idx])
+
+            # calculate z-score
+            perm_std = permutations.std()
+            if perm_std > 0:
+                zscores[idx] = (self.information[idx] - permutations.mean()) / perm_std
+            else:
+                zscores[idx] = np.inf if self.information[idx] > permutations.mean() else 0.0
 
             if pvalues[idx] > self.alpha:
                 n_break += 1
@@ -326,7 +333,7 @@ class PAGE:
                 informative[idx] = 1
                 n_break = 0
 
-        return (informative, pvalues)
+        return (informative, pvalues, zscores)
 
     def _consolidate_pathways(self) -> np.ndarray:
         """Consolidate redundant pathways, tracking which pathway killed each rejection.
@@ -406,6 +413,7 @@ class PAGE:
         sign[sign == 0] = -1
         results = pd.DataFrame({"pathway": self.ontology.pathways[self.pathway_indices],
                                 "CMI": self.information[self.pathway_indices],
+                                "z-score": self.zscores[self.pathway_indices],
                                 "p-value": self.pvalues[self.pathway_indices],
                                 "Regulation pattern": sign}
                                )
@@ -449,7 +457,7 @@ class PAGE:
         self.information = self._calculate_information()
 
         # select informative pathways
-        self.informative, self.pvalues = self._calculate_informative()
+        self.informative, self.pvalues, self.zscores = self._calculate_informative()
 
         # filter redundant pathways
         all_informative_indices = np.flatnonzero(self.informative)
@@ -463,6 +471,7 @@ class PAGE:
         self.full_results = pd.DataFrame({
             "pathway": self.ontology.pathways[all_informative_indices],
             "CMI": self.information[all_informative_indices],
+            "z-score": self.zscores[all_informative_indices],
             "p-value": self.pvalues[all_informative_indices],
             "redundant": [idx not in non_redundant_set for idx in all_informative_indices]
         })
@@ -476,7 +485,7 @@ class PAGE:
 
             return self.results, self.hm
         else:
-            return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"]), None
+            return pd.DataFrame(columns=["pathway", "CMI", "z-score", "p-value", "Regulation pattern"]), None
 
     def run_manual(self, pathway_names: list) -> Tuple[pd.DataFrame, Optional[Heatmap]]:
         """Compute enrichment statistics and heatmap for a user-specified
@@ -513,8 +522,9 @@ class PAGE:
         # Set pathway_indices for enrichment calculation
         self.pathway_indices = pathway_indices
 
-        # p-values are NaN (no permutation testing)
+        # p-values and z-scores are NaN (no permutation testing)
         self.pvalues = np.full(self.num_pathways, np.nan)
+        self.zscores = np.full(self.num_pathways, np.nan)
 
         # Hypergeometric enrichment
         self.overrep_pvals, self.underrep_pvals = self._calculate_enrichment()

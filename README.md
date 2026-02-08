@@ -55,6 +55,7 @@ heatmap.show()
 `results` contains:
 - `pathway`
 - `CMI` — conditional mutual information score
+- `z-score` — z-score of observed CMI vs. permutation null distribution
 - `p-value` — empirical p-value from permutation test
 - `Regulation pattern` (`1` for up, `-1` for down)
 
@@ -131,32 +132,52 @@ exp.convert_from_to("refseq", "ensg", "human")
 
 ## Command Line
 
-After installation, `pypage` is available as a command-line tool:
+After installation, `pypage` is available as a command-line tool. All outputs are saved to an auto-created output directory (default: `{expression_stem}_PAGE/`).
 
 ```bash
-# Basic usage with long-format gene sets
+# Basic usage — outputs go to expression_PAGE/ directory
 pypage -e expression.tab.gz --genesets-long annotations.txt.gz --is-bin
 
 # With GMT file
 pypage -e scores.tab --gmt pathways.gmt --n-bins 10
 
-# Save heatmap and redundancy log
-pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
-    --heatmap results.png --killed killed.tsv -o results.tsv
+# Explicit output directory
+pypage -e expr.tab.gz --gmt pathways.gmt --outdir my_results/
 
 # Manual pathway mode (bypass significance testing)
 pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
     --manual "apoptotic process,cell cycle"
-
-# Manual mode from file (one pathway per line)
-pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
-    --manual pathways_of_interest.txt
 
 # With index-format gene sets
 pypage -e expr.tab.gz -g index_annotations.txt.gz --is-bin
 
 # Reproducible run with seed
 pypage -e expr.tab.gz --gmt pathways.gmt --seed 42
+```
+
+### Output Files
+
+The output directory contains:
+- `results.tsv` — pathway results with CMI, z-score, p-value (scientific notation), and regulation pattern
+- `results.matrix.tsv` — enrichment score matrix (for re-plotting)
+- `results.killed.tsv` — redundancy filtering log
+- `heatmap.pdf` — iPAGE-style enrichment heatmap (editable fonts for Illustrator)
+- `heatmap.html` — interactive HTML heatmap
+
+### Visualization Options
+
+```bash
+# Custom color scale (asymmetric min/max)
+pypage -e expr.tab --gmt pathways.gmt --min-val -2 --max-val 5
+
+# Custom bin-edge bar normalization
+pypage -e expr.tab --gmt pathways.gmt --bar-min -1 --bar-max 1
+
+# Different colormap
+pypage -e expr.tab --gmt pathways.gmt --cmap RdBu_r
+
+# Re-plot from saved matrix (no re-analysis)
+pypage --draw-only -e expr.tab --min-val -2 --max-val 3 --bar-min -1 --bar-max 1
 ```
 
 Run `pypage --help` for a full list of options.
