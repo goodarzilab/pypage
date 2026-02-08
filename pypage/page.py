@@ -10,10 +10,12 @@ from .utils import (
     benjamini_hochberg)
 from .information import (
     mutual_information,
+    conditional_mutual_information,
     calculate_mi_permutations,
     calculate_cmi_permutations,
     measure_redundancy,
-    conditional_mutual_information)
+    batch_mutual_information,
+    batch_conditional_mutual_information)
 from .heatmap import Heatmap
 
 import numpy as np
@@ -95,13 +97,13 @@ class PAGE:
             self,
             expression: ExpressionProfile,
             genesets: GeneSets,
-            n_shuffle: int = 1000,
-            alpha: float = 1e-2,
-            k: int = 10,
-            filter_redundant: bool = False,
+            n_shuffle: int = 10000,
+            alpha: float = 5e-3,
+            k: int = 20,
+            filter_redundant: bool = True,
             n_jobs: Optional[int] = 1,
             function: Optional[str] = 'cmi',
-            redundancy_ratio: Optional[float] = .1):
+            redundancy_ratio: Optional[float] = 5.0):
         """
         Initialize object
 
@@ -120,7 +122,7 @@ class PAGE:
         alpha: float
             the maximum p-value threshold to consider a pathway informative
             with respect to the permuted mutual information distribution
-            (`default = 5e-2`)
+            (`default = 5e-3`)
 
         k: int
             the number of contiguous uninformative pathways to consider before
@@ -134,6 +136,15 @@ class PAGE:
         filter_redundant: bool
             whether to perform the pathway redundancy search
             (`default = True`)
+
+        redundancy_ratio: float
+            the ratio of CMI/MI above which a pathway is considered
+            non-redundant with respect to already accepted pathways
+            (`default = 5.0`)
+
+        function: str
+            the information function to use: 'mi' or 'cmi'
+            (`default = 'cmi'`)
 
         n_jobs: int
             The number of parallel jobs to use in the analysis
@@ -207,30 +218,22 @@ class PAGE:
     def _calculate_information(self) -> np.ndarray:
         """Calculates mutual or conditional mutual information for each pathway
         """
-        information = np.zeros(self.num_pathways)
         if self.function == 'mi':
-            desc = "calculating mutual information"
+            return batch_mutual_information(
+                self.exp_bins,
+                self.ont_bool,
+                self.x_bins,
+                self.y_bins,
+                base=self.base)
         else:
-            desc = "calculating conditional mutual information"
-        pbar = tqdm(range(self.num_pathways), desc=desc)
-        for idx in pbar:
-            if self.function == 'mi':
-                information[idx] = mutual_information(
-                    self.exp_bins,
-                    self.ont_bool[idx],
-                    self.x_bins,
-                    self.y_bins,
-                    base=self.base)
-            else:
-                information[idx] = conditional_mutual_information(
-                    self.exp_bins,
-                    self.ont_bool[idx],
-                    self.membership_bins,
-                    self.x_bins,
-                    self.y_bins,
-                    self.z_bins,
-                    base=self.base)
-        return information
+            return batch_conditional_mutual_information(
+                self.exp_bins,
+                self.ont_bool,
+                self.membership_bins,
+                self.x_bins,
+                self.y_bins,
+                self.z_bins,
+                base=self.base)
 
     def _calculate_information_2D(self) -> np.ndarray:
         """Calculates mutual or conditional mutual information for each pathway
@@ -326,9 +329,10 @@ class PAGE:
         return (informative, pvalues)
 
     def _consolidate_pathways(self) -> np.ndarray:
-        """Consolidate redundant pathways
+        """Consolidate redundant pathways, tracking which pathway killed each rejection.
         """
         existing = []
+        self._killed_log = []
         inf_idx = np.flatnonzero(self.informative)
 
         # iterate through cmi in descending order
@@ -344,7 +348,7 @@ class PAGE:
                 existing.append(idx)
                 continue
 
-            # initialize reduncancy information array
+            # initialize redundancy information array
             all_ri = np.zeros(len(existing))
 
             # calculate redundancy
@@ -360,9 +364,29 @@ class PAGE:
             if all(all_ri > self.redundancy_ratio):
                 existing.append(idx)
             else:
-                pass
+                # Track which accepted pathway caused the rejection
+                min_idx = int(np.argmin(all_ri))
+                killer_idx = existing[min_idx]
+                self._killed_log.append((
+                    self.ontology.pathways[idx],
+                    self.ontology.pathways[killer_idx],
+                    all_ri[min_idx]))
 
         return np.array(existing)
+
+    def get_redundancy_log(self) -> pd.DataFrame:
+        """Return a DataFrame of pathways rejected during redundancy filtering.
+
+        Returns
+        -------
+        pd.DataFrame
+            Columns: rejected_pathway, killed_by, min_ratio
+        """
+        if not hasattr(self, '_killed_log'):
+            return pd.DataFrame(columns=['rejected_pathway', 'killed_by', 'min_ratio'])
+        return pd.DataFrame(
+            self._killed_log,
+            columns=['rejected_pathway', 'killed_by', 'min_ratio'])
 
     def _gather_results(self) -> pd.DataFrame:
         """Gathers the results from the experiment into a single dataframe
@@ -427,10 +451,21 @@ class PAGE:
         self.informative, self.pvalues = self._calculate_informative()
 
         # filter redundant pathways
+        all_informative_indices = np.flatnonzero(self.informative)
         if self.filter_redundant:
             self.pathway_indices = self._consolidate_pathways()
         else:
-            self.pathway_indices = np.flatnonzero(self.informative)
+            self.pathway_indices = all_informative_indices
+
+        # Build full_results containing all informative pathways with redundancy flag
+        non_redundant_set = set(self.pathway_indices.tolist()) if len(self.pathway_indices) > 0 else set()
+        self.full_results = pd.DataFrame({
+            "pathway": self.ontology.pathways[all_informative_indices],
+            "CMI": self.information[all_informative_indices],
+            "p-value": self.pvalues[all_informative_indices],
+            "redundant": [idx not in non_redundant_set for idx in all_informative_indices]
+        })
+
         if len(self.pathway_indices) != 0:
             # hypergeometric testing over selected pathways
             self.overrep_pvals, self.underrep_pvals = self._calculate_enrichment()
@@ -441,6 +476,52 @@ class PAGE:
             return self.results, self.hm
         else:
             return pd.DataFrame(columns=["pathway", "CMI", "p-value", "Regulation pattern"]), None
+
+    def run_manual(self, pathway_names: list) -> Tuple[pd.DataFrame, Optional[Heatmap]]:
+        """Compute enrichment statistics and heatmap for a user-specified
+        list of pathways, bypassing significance and redundancy tests.
+
+        Parameters
+        ----------
+        pathway_names: list
+            List of pathway names to include in the analysis.
+            All names must exist in the gene set annotations.
+
+        Returns
+        -------
+        Tuple[pd.DataFrame, Optional[Heatmap]]
+            Results DataFrame and Heatmap object for the selected pathways.
+        """
+        if len(self.exp_bins.shape) == 2:
+            raise ValueError("run_manual is not supported for 2D expression profiles")
+
+        # Validate pathway names
+        unknown = [n for n in pathway_names if n not in self.ontology.pathways]
+        if unknown:
+            raise ValueError(f"Unknown pathway(s): {unknown}")
+
+        # Resolve pathway names to indices
+        pathway_indices = np.array([
+            int(np.flatnonzero(self.ontology.pathways == name)[0])
+            for name in pathway_names
+        ])
+
+        # Compute MI/CMI for these pathways
+        self.information = self._calculate_information()
+
+        # Set pathway_indices for enrichment calculation
+        self.pathway_indices = pathway_indices
+
+        # p-values are NaN (no permutation testing)
+        self.pvalues = np.full(self.num_pathways, np.nan)
+
+        # Hypergeometric enrichment
+        self.overrep_pvals, self.underrep_pvals = self._calculate_enrichment()
+
+        self.results = self._gather_results()
+        self.hm = self._make_heatmap()
+
+        return self.results, self.hm
 
     def get_enriched_genes(self, name) -> list:
         matches = np.flatnonzero(self.ontology.pathways == name)

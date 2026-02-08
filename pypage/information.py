@@ -46,11 +46,12 @@ def entropy(
     """
     c_x = hist1D(X, x_bins).ravel()
     p_x = c_x / c_x.sum()
+    log_base = np.log(base)
     info = 0.
-    for i in np.arange(x_bins):
+    for i in range(x_bins):
         if p_x[i] == 0:
             continue
-        info -= p_x[i] * np.log(p_x[i]) / np.log(base)
+        info -= p_x[i] * np.log(p_x[i]) / log_base
     return info
 
 
@@ -93,12 +94,13 @@ def joint_entropy(
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     p_xy = c_xy / c_xy.sum()
+    log_base = np.log(base)
     info = 0.
-    for x in np.arange(x_bins):
-        for y in np.arange(y_bins):
+    for x in range(x_bins):
+        for y in range(y_bins):
             if p_xy[x][y] == 0:
                 continue
-            info -= p_xy[x][y] * np.log(p_xy[x][y]) / np.log(base)
+            info -= p_xy[x][y] * np.log(p_xy[x][y]) / log_base
     return info
 
 
@@ -148,15 +150,16 @@ def joint_entropy_3d(
     """
     c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
     p_xyz = c_xyz / c_xyz.sum()
+    log_base = np.log(base)
     info = 0.
-    for x in np.arange(x_bins):
-        for y in np.arange(y_bins):
-            for z in np.arange(z_bins):
+    for x in range(x_bins):
+        for y in range(y_bins):
+            for z in range(z_bins):
                 if p_xyz[x][y][z] == 0:
                     continue
                 info -= p_xyz[x][y][z] \
                         * np.log( p_xyz[x][y][z] ) \
-                        / np.log(base)
+                        / log_base
 
     return info
 
@@ -200,18 +203,19 @@ def conditional_entropy(
     """
     c_xy = hist2D(X, Y, x_bins, y_bins)
     c_y = c_xy.sum(axis=0)
-    
+
     p_xy = c_xy / c_xy.sum()
     p_y = c_y / c_y.sum()
 
+    log_base = np.log(base)
     info = 0.
-    for x in np.arange(x_bins):
-        for y in np.arange(y_bins):
+    for x in range(x_bins):
+        for y in range(y_bins):
             if p_xy[x][y] == 0:
                 continue
             info -= p_xy[x][y] *\
                     np.log( (p_xy[x][y]) / p_y[y] ) \
-                    / np.log(base)
+                    / log_base
     return info
 
 
@@ -260,13 +264,14 @@ def mutual_information(
     p_x = c_x / c_x.sum()
     p_y = c_y / c_y.sum()
 
+    log_base = np.log(base)
     info = 0.
     for x in range(x_bins):
         for y in range(y_bins):
             if p_xy[x][y] == 0:
                 continue
-            info += p_xy[x][y] * np.log(p_xy[x][y] / (p_x[x] * p_y[y])) / np.log(base)
-    
+            info += p_xy[x][y] * np.log(p_xy[x][y] / (p_x[x] * p_y[y])) / log_base
+
     return info
 
 
@@ -316,16 +321,32 @@ def conditional_mutual_information(
     """
 
     c_xyz = hist3D(X, Y, Z, x_bins, y_bins, z_bins)
-    c_xz = hist2D(X, Z, x_bins, z_bins)
-    c_yz = hist2D(Y, Z, y_bins, z_bins)
-    c_z = hist1D(Z, z_bins).ravel()
 
-    p_xyz = c_xyz / c_xyz.sum()
-    p_xz = c_xz / c_xz.sum()
-    p_yz = c_yz / c_yz.sum()
-    p_z = c_z / c_z.sum()
+    # Derive marginals from c_xyz via axis summation (O(bins) instead of O(n))
+    c_xz = np.zeros((x_bins, z_bins), dtype=np.int32)
+    for x in range(x_bins):
+        for z in range(z_bins):
+            for y in range(y_bins):
+                c_xz[x, z] += c_xyz[x, y, z]
+    c_yz = np.zeros((y_bins, z_bins), dtype=np.int32)
+    for y in range(y_bins):
+        for z in range(z_bins):
+            for x in range(x_bins):
+                c_yz[y, z] += c_xyz[x, y, z]
+    c_z = np.zeros(z_bins, dtype=np.int32)
+    for z in range(z_bins):
+        for x in range(x_bins):
+            for y in range(y_bins):
+                c_z[z] += c_xyz[x, y, z]
+
+    n = c_xyz.sum()
+    p_xyz = c_xyz / n
+    p_xz = c_xz / n
+    p_yz = c_yz / n
+    p_z = c_z / n
 
 
+    log_base = np.log(base)
     info = 0.
     for x in range(x_bins):
         for y in range(y_bins):
@@ -334,7 +355,7 @@ def conditional_mutual_information(
                     continue
                 numer = p_z[z] * p_xyz[x][y][z]
                 denom = p_xz[x][z] * p_yz[y][z]
-                info += p_xyz[x][y][z] * np.log(numer / denom) / np.log(base)
+                info += p_xyz[x][y][z] * np.log(numer / denom) / log_base
     return info
 
 
@@ -503,6 +524,90 @@ def measure_redundancy(
             base=base)
 
     if mi <= 0:
-        return 0.0
+        return 1e12  # independent pathways have no redundancy → always accept
     return cmi / mi
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    parallel=True)
+def batch_mutual_information(
+        exp_bins: np.ndarray,
+        ont_bool: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        base: int = 2) -> np.ndarray:
+    """Calculates mutual information for all pathways in parallel.
+
+    Parameters
+    ----------
+    exp_bins: np.ndarray
+        a 1D array of expression bin indices (n_genes,)
+    ont_bool: np.ndarray
+        a 2D boolean/int array of pathway memberships (n_pathways, n_genes)
+    x_bins: int
+        the number of expression bins
+    y_bins: int
+        the number of ontology bins (typically 2)
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    np.ndarray
+        MI values for each pathway (n_pathways,)
+    """
+    n = ont_bool.shape[0]
+    result = np.zeros(n)
+    for i in nb.prange(n):
+        result[i] = mutual_information(exp_bins, ont_bool[i], x_bins, y_bins, base)
+    return result
+
+
+@nb.jit(
+    cache=True,
+    nogil=True,
+    nopython=True,
+    parallel=True)
+def batch_conditional_mutual_information(
+        exp_bins: np.ndarray,
+        ont_bool: np.ndarray,
+        membership_bins: np.ndarray,
+        x_bins: int,
+        y_bins: int,
+        z_bins: int,
+        base: int = 2) -> np.ndarray:
+    """Calculates conditional mutual information for all pathways in parallel.
+
+    Parameters
+    ----------
+    exp_bins: np.ndarray
+        a 1D array of expression bin indices (n_genes,)
+    ont_bool: np.ndarray
+        a 2D boolean/int array of pathway memberships (n_pathways, n_genes)
+    membership_bins: np.ndarray
+        a 1D array of membership bin indices (n_genes,)
+    x_bins: int
+        the number of expression bins
+    y_bins: int
+        the number of ontology bins (typically 2)
+    z_bins: int
+        the number of membership bins
+    base: int
+        the base of the logarithm
+
+    Returns
+    -------
+    np.ndarray
+        CMI values for each pathway (n_pathways,)
+    """
+    n = ont_bool.shape[0]
+    result = np.zeros(n)
+    for i in nb.prange(n):
+        result[i] = conditional_mutual_information(
+            exp_bins, ont_bool[i], membership_bins,
+            x_bins, y_bins, z_bins, base)
+    return result
 

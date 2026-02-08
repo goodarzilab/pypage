@@ -155,3 +155,36 @@ def test_filter_pathways_invalid_max_raises():
     gs = _make_genesets()
     with pytest.raises(ValueError, match="maximum must be > min_size"):
         gs.filter_pathways(min_size=10, max_size=5)
+
+
+# --- Killed-by tracking ---
+
+def test_get_redundancy_log_without_run():
+    exp = _make_expression()
+    gs = _make_genesets()
+    p = PAGE(exp, gs, n_shuffle=10, k=1, filter_redundant=True)
+    log = p.get_redundancy_log()
+    assert list(log.columns) == ['rejected_pathway', 'killed_by', 'min_ratio']
+    assert len(log) == 0
+
+
+def test_get_redundancy_log_after_run():
+    np.random.seed(42)
+    exp = _make_expression()
+    gs = _make_genesets()
+    p = PAGE(exp, gs, n_shuffle=10, k=5, alpha=0.5, filter_redundant=True)
+    p.run()
+    log = p.get_redundancy_log()
+    assert list(log.columns) == ['rejected_pathway', 'killed_by', 'min_ratio']
+    # log may or may not have entries depending on data, but structure is correct
+    assert isinstance(log, pd.DataFrame)
+
+
+def test_full_results_has_redundant_column():
+    np.random.seed(42)
+    exp = _make_expression()
+    gs = _make_genesets()
+    p = PAGE(exp, gs, n_shuffle=10, k=5, alpha=0.5, filter_redundant=True)
+    p.run()
+    assert hasattr(p, 'full_results')
+    assert 'redundant' in p.full_results.columns

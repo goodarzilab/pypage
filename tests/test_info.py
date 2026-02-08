@@ -9,7 +9,10 @@ from pypage.information import (
         joint_entropy,
         joint_entropy_3d,
         mutual_information,
-        conditional_mutual_information)
+        conditional_mutual_information,
+        measure_redundancy,
+        batch_mutual_information,
+        batch_conditional_mutual_information)
 
 EPSILON = 1e-9
 
@@ -144,3 +147,45 @@ def test_conditional_mutual_information():
     exp1 = h_xz + h_yz - h_xyz - h_z
 
     assert np.abs(cmi - exp1) < EPSILON
+
+
+def test_measure_redundancy_independent_pathways():
+    """When MI(candidate, accepted) <= 0, measure_redundancy should return
+    a large value so that independent pathways are accepted, not rejected."""
+    n = 1000
+    x = np.random.randint(0, 3, size=n).astype(np.int32)
+    y = np.random.randint(0, 2, size=n).astype(np.int32)
+    # Z is constant → MI(Y, Z) = 0 → triggers the mi <= 0 branch
+    z = np.zeros(n, dtype=np.int32)
+    r = measure_redundancy(x, y, z, 3, 2, 1)
+    # Should be very large (1e12), not 0.0
+    assert r > 1e6
+
+
+def test_batch_mutual_information():
+    """batch_mutual_information should match sequential calls."""
+    np.random.seed(123)
+    n_genes = 500
+    n_pathways = 10
+    exp = np.random.randint(0, 5, size=n_genes).astype(np.int32)
+    ont = np.random.randint(0, 2, size=(n_pathways, n_genes)).astype(np.int32)
+
+    batch_result = batch_mutual_information(exp, ont, 5, 2)
+    for i in range(n_pathways):
+        seq_result = mutual_information(exp, ont[i], 5, 2)
+        assert np.abs(batch_result[i] - seq_result) < EPSILON
+
+
+def test_batch_conditional_mutual_information():
+    """batch_conditional_mutual_information should match sequential calls."""
+    np.random.seed(456)
+    n_genes = 500
+    n_pathways = 8
+    exp = np.random.randint(0, 4, size=n_genes).astype(np.int32)
+    ont = np.random.randint(0, 2, size=(n_pathways, n_genes)).astype(np.int32)
+    mem = np.random.randint(0, 3, size=n_genes).astype(np.int32)
+
+    batch_result = batch_conditional_mutual_information(exp, ont, mem, 4, 2, 3)
+    for i in range(n_pathways):
+        seq_result = conditional_mutual_information(exp, ont[i], mem, 4, 2, 3)
+        assert np.abs(batch_result[i] - seq_result) < EPSILON

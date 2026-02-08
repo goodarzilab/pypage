@@ -129,18 +129,47 @@ gs.map_genes(mapper, from_type='entrez', to_type='symbol')
 exp.convert_from_to("refseq", "ensg", "human")
 ```
 
+## Command Line
+
+After installation, `pypage` is available as a command-line tool:
+
+```bash
+# Basic usage with long-format gene sets
+pypage -e expression.tab.gz --genesets-long annotations.txt.gz --is-bin
+
+# With GMT file
+pypage -e scores.tab --gmt pathways.gmt --n-bins 10
+
+# Save heatmap and redundancy log
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+    --heatmap results.png --killed killed.tsv -o results.tsv
+
+# Manual pathway mode (bypass significance testing)
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+    --manual "apoptotic process,cell cycle"
+
+# With index-format gene sets
+pypage -e expr.tab.gz -g index_annotations.txt.gz --is-bin
+
+# Reproducible run with seed
+pypage -e expr.tab.gz --gmt pathways.gmt --seed 42
+```
+
+Run `pypage --help` for a full list of options.
+
 ## Bulk PAGE Analysis
 
 The `PAGE` class performs pathway enrichment analysis with permutation testing and optional redundancy filtering:
 
 ```python
 p = PAGE(exp, gs,
-    function='cmi',         # 'cmi' (default, corrects annotation bias) or 'mi'
-    n_shuffle=1000,         # permutation count
-    alpha=0.01,             # p-value threshold
-    k=10,                   # early-stopping parameter
-    filter_redundant=True,  # remove redundant pathways
-    n_jobs=1,               # parallel threads
+    function='cmi',           # 'cmi' (default, corrects annotation bias) or 'mi'
+    n_shuffle=10000,          # permutation count
+    alpha=0.005,              # p-value threshold
+    k=20,                     # early-stopping parameter
+    filter_redundant=True,    # remove redundant pathways (default)
+    redundancy_ratio=5.0,     # CMI/MI ratio threshold
+    n_jobs=1,                 # parallel threads
 )
 results, heatmap = p.run()
 
@@ -149,6 +178,44 @@ enriched = p.get_enriched_genes("pathway_name")
 
 # Enrichment score matrix (log10 hypergeometric p-values)
 es_matrix = p.get_es_matrix()
+```
+
+## Advanced Features
+
+### Manual Pathway Analysis
+
+Analyze specific pathways without significance testing using `run_manual()`:
+
+```python
+p = PAGE(exp, gs)
+results, heatmap = p.run_manual(["apoptotic process", "cell cycle"])
+```
+
+This bypasses permutation testing and redundancy filtering, computing enrichment statistics and a heatmap for only the specified pathways. Useful for inspecting known pathways of interest.
+
+### Inspecting Redundancy Filtering
+
+After a standard `run()` with `filter_redundant=True`, inspect which pathways were removed and why:
+
+```python
+p = PAGE(exp, gs)
+results, heatmap = p.run()
+
+# DataFrame with columns: rejected_pathway, killed_by, min_ratio
+killed = p.get_redundancy_log()
+print(killed)
+```
+
+### Full Results with Redundancy Flags
+
+`full_results` contains all informative pathways (before redundancy filtering) with a `redundant` column:
+
+```python
+p = PAGE(exp, gs)
+results, heatmap = p.run()
+
+# All informative pathways, with redundant=True/False
+print(p.full_results)
 ```
 
 ## Single-Cell Analysis
@@ -205,11 +272,11 @@ summary, group_results = sc.run_neighborhoods(labels=adata.obs['leiden'])
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `function` | `'cmi'` | `'cmi'` (conditional MI, corrects annotation bias) or `'mi'` |
-| `n_shuffle` | `1000` | Number of permutations for significance testing |
-| `alpha` | `0.01` | P-value threshold for informative pathways |
-| `k` | `10` | Early-stopping: stop after k consecutive non-significant pathways |
-| `filter_redundant` | `False` | Remove redundant pathways via CMI |
-| `redundancy_ratio` | `0.1` | Redundancy threshold (higher = stricter filtering) |
+| `n_shuffle` | `10000` | Number of permutations for significance testing |
+| `alpha` | `0.005` | P-value threshold for informative pathways |
+| `k` | `20` | Early-stopping: stop after k consecutive non-significant pathways |
+| `filter_redundant` | `True` | Remove redundant pathways via CMI |
+| `redundancy_ratio` | `5.0` | CMI/MI ratio threshold; pathways with all ratios above this are kept |
 | `n_jobs` | `1` | Number of parallel threads |
 
 ### SingleCellPAGE

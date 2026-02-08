@@ -31,7 +31,7 @@ def hist1D(
         number of events in each bin
     """
     ct = np.zeros((bin_a, 1), dtype=np.int32)
-    for x in np.arange(arr_a.size):
+    for x in range(arr_a.size):
         ct[arr_a[x]] += 1
     return ct
 
@@ -75,7 +75,7 @@ def hist2D(
     """
     assert arr_a.size == arr_b.size
     ct = np.zeros((bin_a, bin_b), dtype=np.int32)
-    for x in np.arange(arr_a.size):
+    for x in range(arr_a.size):
         ct[arr_a[x]][arr_b[x]] += 1
     return ct
 
@@ -127,6 +127,6 @@ def hist3D(
     assert arr_a.size == arr_b.size
     assert arr_b.size == arr_c.size
     ct = np.zeros((bin_a, bin_b, bin_c), dtype=np.int32)
-    for x in np.arange(arr_a.size):
+    for x in range(arr_a.size):
         ct[arr_a[x]][arr_b[x]][arr_c[x]] += 1
     return ct

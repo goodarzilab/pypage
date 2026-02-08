@@ -161,13 +161,13 @@ Available formats: ensg (ensemble gene ids), enst (ensemble transcript ids), ref
 class pypage.PAGE(
             expression: ExpressionProfile,
             genesets: GeneSets,
-            n_shuffle: int = 1e3,
-            alpha: float = 1e-2,
-            k: int = 10,
-            filter_redundant: bool = False,
+            n_shuffle: int = 1e4,
+            alpha: float = 5e-3,
+            k: int = 20,
+            filter_redundant: bool = True,
             n_jobs: Optional[int] = 1,
             function: Optional[str] = 'cmi',
-            redundancy_ratio: Optional[float] = .1)
+            redundancy_ratio: Optional[float] = 5.0)
 ```
 The main object of the package that performs the computation of differentially active genes and stores the results.
 
@@ -179,28 +179,30 @@ The main object of the package that performs the computation of differentially a
             GeneSets object containing gene annotations.
 
         n_shuffle: int
-            The number of permutations in the statistical test.
+            The number of permutations in the statistical test (default: 10000).
 
         alpha: float
             The maximum p-value threshold to consider a pathway informative
-            with respect to the permuted mutual information distribution
+            with respect to the permuted mutual information distribution (default: 0.005).
 
         k: int
             The number of contiguous uninformative pathways to consider before
-            stopping the informative pathway search
+            stopping the informative pathway search (default: 20).
 
         filter_redundant: bool
-            Specify whether to perform the pathway redundancy search
+            Specify whether to perform the pathway redundancy search (default: True).
 
         n_jobs: int
             The number of parallel jobs to use in the analysis
-            (`default = all available cores`)
-            
+            (`default = 1`)
+
         function: str
-            Specify whether conditional mutual information ('cmi') or mutual information ('mi') should be calculated.
-        
+            Specify whether conditional mutual information ('cmi') or mutual information ('mi')
+            should be calculated (default: 'cmi').
+
         redundancy_ratio: float
-            The redundacy ratio to use (the bigger the threshold the lesser number of gene-sets will be in the output). To understand it refer to the paper.
+            CMI/MI ratio threshold for redundancy filtering. Pathways where all pairwise
+            ratios against accepted pathways are above this value are kept (default: 5.0).
 ```
 
 #### PAGE.run
@@ -210,17 +212,64 @@ PAGE.run()
 The function to run computation of differentially active genes.
 As a result it produces a pandas dataframe and a Heatmap object which can also be accessed as PAGE.results and PAGE.hm attributes.
 
+#### PAGE.run_manual
+```python3
+PAGE.run_manual(pathway_names: list) -> Tuple[pd.DataFrame, Optional[Heatmap]]
+```
+
+Compute enrichment statistics and heatmap for a user-specified list of pathways, bypassing significance and redundancy tests. All names must exist in the gene set annotations.
+
+```
+    pathway_names: list
+        List of pathway names to include in the analysis.
+
+    Returns:
+        Tuple of (results DataFrame, Heatmap object).
+        The results DataFrame contains pathway, CMI, p-value (NaN), and Regulation pattern.
+```
+
 #### PAGE.get_enriched_genes
 ```python3
 PAGE.get_enriched_genes(pathway: str)
 ```
 
-The function that returns the information about which gene-set genes are present in which expression bin. 
+The function that returns the information about which gene-set genes are present in which expression bin.
 
 ```
     name: str
         The name of the gene-set.
 ```
+
+#### PAGE.get_redundancy_log
+```python3
+PAGE.get_redundancy_log() -> pd.DataFrame
+```
+
+Return a DataFrame of pathways rejected during redundancy filtering. Only populated after `run()` with `filter_redundant=True`.
+
+```
+    Returns:
+        pd.DataFrame with columns:
+            rejected_pathway: str — name of the rejected pathway
+            killed_by: str — name of the accepted pathway that caused the rejection
+            min_ratio: float — the lowest CMI/MI ratio that triggered removal
+```
+
+#### PAGE.get_es_matrix
+```python3
+PAGE.get_es_matrix() -> pd.DataFrame
+```
+
+Returns the enrichment score matrix for each pathway and bin. Enrichment scores are defined as log10 hypergeometric p-values (overrepresented scores per bin are positive, underrepresented scores are negative). Only available after `run()` or `run_manual()`.
+
+```
+    Returns:
+        pd.DataFrame — rows are pathways, columns are bins.
+```
+
+#### PAGE.full_results
+
+After `run()`, `PAGE.full_results` is a DataFrame containing **all** informative pathways (before redundancy filtering) with a boolean `redundant` column. Columns: `pathway`, `CMI`, `p-value`, `redundant`.
 
 ## pypage.Heatmap
 
@@ -379,3 +428,57 @@ GeneMapper.cache_path -> str
 ```
 
 Path to the cached mapping file (e.g., `~/.pypage/gene_map_human.tsv`).
+
+## Command Line Interface
+
+After installation (`pip install bio-pypage` or `pip install -e .`), the `pypage` command is available:
+
+```
+pypage --expression FILE --genesets FILE [options]
+pypage --expression FILE --genesets-long FILE [options]
+pypage --expression FILE --gmt FILE [options]
+```
+
+### Arguments
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-e`, `--expression` | Expression file (tab-delimited: gene, score/bin) | required |
+| `-g`, `--genesets` | Gene set index file (pathway\tgene1\tgene2..., supports .gz) | mutually exclusive |
+| `--genesets-long` | Gene set long-format file (gene\tpathway per line, supports .gz) | mutually exclusive |
+| `--gmt` | Gene set GMT file (.gmt or .gmt.gz) | mutually exclusive |
+| `--is-bin` | Treat expression values as pre-binned labels | `False` |
+| `--n-bins` | Number of bins for continuous expression | `10` |
+| `--function` | `mi` or `cmi` | `cmi` |
+| `--n-shuffle` | Number of permutations | `10000` |
+| `--alpha` | P-value threshold | `0.005` |
+| `-k` | Early-stopping consecutive failures | `20` |
+| `--filter-redundant` / `--no-filter-redundant` | Redundancy filtering | `True` |
+| `--redundancy-ratio` | CMI/MI threshold for redundancy | `5.0` |
+| `--n-jobs` | Parallel threads | `1` |
+| `-o`, `--output` | Output TSV path | stdout |
+| `--heatmap` | Save heatmap image to path (PNG/PDF) | — |
+| `--manual` | Comma-separated pathway names (bypass significance testing) | — |
+| `--killed` | Save redundancy log to path (TSV) | — |
+| `--seed` | Random seed for reproducibility | — |
+
+### Examples
+
+```bash
+# Basic run with long-format gene sets
+pypage -e expression.tab.gz --genesets-long annotations.txt.gz --is-bin
+
+# With GMT file and custom parameters
+pypage -e scores.tab --gmt pathways.gmt --n-shuffle 5000 --alpha 0.01
+
+# Save results, heatmap, and redundancy log
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+    -o results.tsv --heatmap heatmap.png --killed killed.tsv
+
+# Manual pathway analysis
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+    --manual "apoptotic process,cell cycle"
+
+# Reproducible run
+pypage -e expr.tab.gz --gmt pathways.gmt --seed 42
+```

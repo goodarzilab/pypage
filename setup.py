@@ -14,6 +14,9 @@ setup(
    author_email="logic2000.bakulin@gmail.com",
    packages=['pypage', 'pypage.io'],
    install_requires=open('requirements.txt').read().split(),
+   entry_points={
+        'console_scripts': ['pypage=pypage.cli:main'],
+   },
    classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

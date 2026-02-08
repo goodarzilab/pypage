@@ -48,13 +48,40 @@ def test_run_reuse_inputs(load_expression, load_ontology):
         load_expression,
         load_ontology,
         n_shuffle=2,
-        k=1)
+        k=1,
+        filter_redundant=False)
     p1.run()
 
     p2 = PAGE(
         load_expression,
         load_ontology,
         n_shuffle=2,
-        k=1)
+        k=1,
+        filter_redundant=False)
     results = p2.run()
     assert isinstance(results, tuple)
+
+
+def test_run_manual(load_expression, load_ontology):
+    p = PAGE(
+        load_expression,
+        load_ontology,
+        n_shuffle=5,
+        k=2)
+    # Pick first 3 pathways
+    pathways = list(p.ontology.pathways[:3])
+    results, hm = p.run_manual(pathways)
+    assert len(results) == 3
+    assert set(results['pathway']) == set(pathways)
+    assert hm is not None
+
+
+def test_run_manual_unknown_pathway(load_expression, load_ontology):
+    p = PAGE(
+        load_expression,
+        load_ontology,
+        n_shuffle=5,
+        k=2)
+    import pytest
+    with pytest.raises(ValueError, match="Unknown pathway"):
+        p.run_manual(['nonexistent_pathway_xyz'])
