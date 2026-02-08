@@ -152,7 +152,7 @@ def benjamini_hochberg(
     >>> qvals[qvals < 0.05].size
     10
     """
-    p = np.asfarray(p)
+    p = np.asarray(p, dtype=np.float64)
     by_descend = p.argsort()[::-1]
     by_orig = by_descend.argsort()
     steps = float(len(p)) / np.arange(len(p), 0, -1)

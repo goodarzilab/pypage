@@ -58,7 +58,63 @@ heatmap.show()
 - `p-value`
 - `Regulation pattern` (`1` for up, `-1` for down)
 
-## Input Notes
+## Single-Cell Analysis
+
+`SingleCellPAGE` brings per-cell pathway scoring and spatial coherence testing to pyPAGE, inspired by [VISION](https://github.com/YosefLab/VISION). It accepts AnnData objects or raw numpy arrays.
+
+```python
+import anndata
+from pypage import GeneSets, SingleCellPAGE
+
+# Load your single-cell data
+adata = anndata.read_h5ad("my_data.h5ad")
+gs = GeneSets(ann_file="annotations.txt.gz")
+
+# Run per-cell MI/CMI scoring + Geary's C spatial coherence test
+sc = SingleCellPAGE(adata=adata, genesets=gs, function='cmi')
+results = sc.run(n_permutations=1000)
+
+print(results.head())
+```
+
+`results` contains:
+- `pathway`
+- `consistency` — spatial autocorrelation score (C' = 1 - Geary's C; higher = more coherent)
+- `p-value` — empirical p-value from size-matched random gene sets
+- `FDR` — Benjamini-Hochberg corrected p-value
+
+### Visualization
+
+```python
+# Pathway scores on UMAP embedding
+sc.plot_pathway_on_embedding("MyPathway", embedding_key='X_umap')
+
+# Top pathways ranked by spatial consistency
+sc.plot_consistency_ranking(top_n=20)
+
+# Heatmap of pathway scores across cell clusters
+sc.plot_pathway_heatmap(adata.obs['leiden'])
+```
+
+### Neighborhood mode
+
+Aggregate cells by cluster labels and run standard bulk PAGE per group:
+
+```python
+summary, group_results = sc.run_neighborhoods(labels=adata.obs['leiden'])
+```
+
+### Input options
+
+| Input | How |
+|-------|-----|
+| AnnData | `SingleCellPAGE(adata=adata, genesets=gs)` |
+| Numpy arrays | `SingleCellPAGE(expression=X, genes=gene_names, genesets=gs)` |
+| Precomputed KNN | `SingleCellPAGE(adata=adata, genesets=gs, connectivity=W)` |
+
+See `notebooks/single_cell_page_tutorial.ipynb` for a full walkthrough.
+
+## Bulk Analysis — Input Notes
 
 - Expression input can be:
   - continuous differential scores (set `is_bin=False`, default), or

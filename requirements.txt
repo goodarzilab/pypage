@@ -6,3 +6,5 @@ scipy
 pytest
 pybiomart
 matplotlib
+anndata
+scikit-learn
