@@ -57,6 +57,7 @@ class ExpressionProfile:
         n_bins: int
         """
         self._is_bin = is_bin
+        self.bin_edges = None
         self._validate_inputs(genes, expression)
         self._process_input(genes, expression)
         self.n_bins = n_bins
@@ -119,6 +120,7 @@ class ExpressionProfile:
         bins_for_discr = np.interp(np.linspace(0, length, bins + 1),
                                    np.arange(length),
                                    np.sort(to_discr))
+        self.bin_edges = bins_for_discr.copy()
         bins_for_discr[-1] += 1  # otherwise numpy creates one extra bin with only 1 point
         digitized = np.digitize(to_discr, bins_for_discr)
         digitized = digitized - 1

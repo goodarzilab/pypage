@@ -420,7 +420,8 @@ class PAGE:
         """
 
         hm = Heatmap(np.array(self.results['pathway']),
-                     self.graphical_ar)
+                     self.graphical_ar,
+                     bin_edges=getattr(self.expression, 'bin_edges', None))
 
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm

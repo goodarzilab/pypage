@@ -183,3 +183,94 @@ def plot_consistency_ranking(
     ax.legend(handles=legend_elements, loc='lower right', fontsize=8)
 
     return ax
+
+
+def consistency_ranking_to_html(
+    results,
+    output_path,
+    top_n=30,
+    fdr_threshold=0.05,
+    title='',
+):
+    """Generate a standalone HTML file with consistency ranking bars.
+
+    Parameters
+    ----------
+    results : pd.DataFrame
+        From SingleCellPAGE.run(), with 'pathway', 'consistency', 'FDR', 'p-value'.
+    output_path : str
+        Path to write the HTML file.
+    top_n : int
+        Number of top pathways to display.
+    fdr_threshold : float
+        FDR threshold for significance coloring.
+    title : str
+        Page title.
+    """
+    df = results.sort_values('consistency', ascending=False).head(top_n)
+    max_c = df['consistency'].max() if len(df) > 0 else 1.0
+    if max_c <= 0:
+        max_c = 1.0
+
+    html_parts = []
+    html_parts.append("<!DOCTYPE html><html><head><meta charset='utf-8'>")
+    html_parts.append(f"<title>{title or 'pyPAGE-SC Consistency Ranking'}</title>")
+    html_parts.append("""<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h1 { font-size: 1.3em; }
+table { border-collapse: collapse; width: auto; }
+td, th { padding: 4px 8px; text-align: left; font-size: 12px; border: 1px solid #ddd; }
+th { background: #f5f5f5; }
+.bar-cell { width: 300px; position: relative; }
+.bar { height: 18px; display: inline-block; border-radius: 2px; }
+.bar-sig { background: #2166ac; }
+.bar-ns { background: #d6604d; }
+#tooltip { position: fixed; background: #333; color: #fff; padding: 6px 10px;
+  border-radius: 4px; font-size: 11px; pointer-events: none; display: none; z-index: 999; }
+.legend { margin-top: 14px; font-size: 12px; }
+.legend-box { display: inline-block; width: 18px; height: 12px; margin-right: 4px; vertical-align: middle; border: 1px solid #aaa; }
+</style></head><body>""")
+    if title:
+        html_parts.append(f"<h1>{title}</h1>")
+
+    html_parts.append("""<div id="tooltip"></div>
+<script>
+var tip = document.getElementById('tooltip');
+function showTip(e, text) { tip.style.display='block'; tip.innerHTML=text;
+  tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY+12)+'px'; }
+function hideTip() { tip.style.display='none'; }
+</script>""")
+
+    html_parts.append("<table><tr><th>Pathway</th><th>Consistency</th><th>FDR</th></tr>")
+
+    for _, row in df.iterrows():
+        pw = row['pathway']
+        c_val = row['consistency']
+        fdr_val = row.get('FDR', 1.0)
+        p_val = row.get('p-value', float('nan'))
+        is_sig = fdr_val < fdr_threshold
+        bar_class = 'bar-sig' if is_sig else 'bar-ns'
+        bar_width = max(0, c_val / max_c * 100)
+        tip_text = (f"{pw}<br>Consistency: {c_val:.4f}<br>"
+                    f"p-value: {p_val:.4g}<br>FDR: {fdr_val:.4g}")
+
+        html_parts.append(
+            f'<tr><td>{pw}</td>'
+            f'<td class="bar-cell" onmousemove="showTip(event,\'{tip_text}\')" '
+            f'onmouseout="hideTip()">'
+            f'<span class="bar {bar_class}" style="width:{bar_width:.1f}%"></span> '
+            f'{c_val:.4f}</td>'
+            f'<td>{fdr_val:.4g}</td></tr>')
+
+    html_parts.append("</table>")
+
+    # Legend
+    html_parts.append('<div class="legend">')
+    html_parts.append(f'<span class="legend-box" style="background:#2166ac"></span> FDR &lt; {fdr_threshold} &nbsp;')
+    html_parts.append(f'<span class="legend-box" style="background:#d6604d"></span> FDR &ge; {fdr_threshold}')
+    html_parts.append('</div>')
+
+    html_parts.append("</body></html>")
+
+    with open(output_path, "w") as f:
+        f.write("\n".join(html_parts))

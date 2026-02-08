@@ -13,6 +13,7 @@ import pandas as pd
 
 from .io import ExpressionProfile, GeneSets
 from .page import PAGE
+from .heatmap import Heatmap
 
 
 def _parse_manual(value):
@@ -32,11 +33,11 @@ def _build_parser():
 
     # -- Input files ----------------------------------------------------------
     parser.add_argument(
-        "-e", "--expression", required=True,
+        "-e", "--expression", required=False, default=None,
         help="Expression file (tab-delimited: gene <TAB> score/bin)",
     )
 
-    gs_group = parser.add_mutually_exclusive_group(required=True)
+    gs_group = parser.add_mutually_exclusive_group(required=False)
     gs_group.add_argument(
         "-g", "--genesets",
         help="Gene set index file (pathway<TAB>gene1<TAB>gene2..., supports .gz)",
@@ -102,7 +103,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--heatmap", default=None,
-        help="Save heatmap image to path (PNG/PDF)",
+        help="Save heatmap image to path (PNG/PDF/SVG)",
     )
     parser.add_argument(
         "--manual", default=None,
@@ -117,6 +118,46 @@ def _build_parser():
         help="Random seed for reproducibility",
     )
 
+    # -- Visualization options ------------------------------------------------
+    parser.add_argument(
+        "--html", default=None,
+        help="Save heatmap as standalone HTML file",
+    )
+    parser.add_argument(
+        "--cmap", default="viridis",
+        help="Colormap for enrichment heatmap (default: viridis)",
+    )
+    parser.add_argument(
+        "--cmap-reg", default="plasma",
+        help="Colormap for regulator column (default: plasma)",
+    )
+    parser.add_argument(
+        "--max-rows", type=int, default=50,
+        help="Max pathways displayed (default: 50, -1 for all)",
+    )
+    parser.add_argument(
+        "--max-val", type=int, default=5,
+        help="Color scale abs cap (default: 5)",
+    )
+    parser.add_argument(
+        "--title", default="",
+        help="Plot title",
+    )
+    parser.add_argument(
+        "--show-reg", action="store_true", default=False,
+        help="Show regulator expression column",
+    )
+
+    # -- Draw-only mode -------------------------------------------------------
+    parser.add_argument(
+        "--draw-only", action="store_true", default=False,
+        help="Skip analysis, load saved matrix for visualization only",
+    )
+    parser.add_argument(
+        "--matrix", default=None,
+        help="Path to .matrix.tsv (required with --draw-only)",
+    )
+
     return parser
 
 
@@ -124,9 +165,43 @@ def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
 
+    # -- Validate conditional requirements ------------------------------------
+    if args.draw_only:
+        if args.matrix is None:
+            parser.error("--matrix is required when using --draw-only")
+    else:
+        if args.expression is None:
+            parser.error("-e/--expression is required when not using --draw-only")
+        if args.genesets is None and args.genesets_long is None and args.gmt is None:
+            parser.error("one of -g/--genesets, --genesets-long, --gmt is required when not using --draw-only")
+
     # -- Seed -----------------------------------------------------------------
     if args.seed is not None:
         np.random.seed(args.seed)
+
+    # -- Draw-only mode -------------------------------------------------------
+    if args.draw_only:
+        heatmap = Heatmap.from_matrix(args.matrix)
+        heatmap.cmap_main = args.cmap
+        heatmap.cmap_reg = args.cmap_reg
+
+        # Optionally load expression for regulator overlay
+        if args.expression and args.show_reg:
+            expr_df = pd.read_csv(
+                args.expression, sep="\t", header=None, names=["gene", "score"],
+            )
+            heatmap.add_gene_expression(
+                np.array(expr_df["gene"]), np.array(expr_df["score"]))
+
+        if args.heatmap is not None:
+            heatmap.save(args.heatmap, max_rows=args.max_rows,
+                         show_reg=args.show_reg, max_val=args.max_val,
+                         title=args.title)
+        if args.html is not None:
+            heatmap.to_html(args.html, max_rows=args.max_rows,
+                            show_reg=args.show_reg, max_val=args.max_val,
+                            title=args.title)
+        return
 
     # -- Load expression ------------------------------------------------------
     expr_df = pd.read_csv(
@@ -172,12 +247,31 @@ def main(argv=None):
     # -- Write results --------------------------------------------------------
     if args.output is not None:
         results.to_csv(args.output, sep="\t", index=False)
+        # Auto-save companion matrix
+        if heatmap is not None:
+            if '.' in args.output:
+                matrix_path = args.output.rsplit('.', 1)[0] + '.matrix.tsv'
+            else:
+                matrix_path = args.output + '.matrix.tsv'
+            heatmap.save_matrix(matrix_path)
+            print(f"Enrichment matrix saved to {matrix_path}", file=sys.stderr)
     else:
         results.to_csv(sys.stdout, sep="\t", index=False)
 
-    # -- Heatmap --------------------------------------------------------------
+    # -- Apply viz params and save heatmap ------------------------------------
+    if heatmap is not None:
+        heatmap.cmap_main = args.cmap
+        heatmap.cmap_reg = args.cmap_reg
+
     if args.heatmap is not None and heatmap is not None:
-        heatmap.save(args.heatmap)
+        heatmap.save(args.heatmap, max_rows=args.max_rows,
+                     show_reg=args.show_reg, max_val=args.max_val,
+                     title=args.title)
+
+    if args.html is not None and heatmap is not None:
+        heatmap.to_html(args.html, max_rows=args.max_rows,
+                        show_reg=args.show_reg, max_val=args.max_val,
+                        title=args.title)
 
     # -- Redundancy log -------------------------------------------------------
     if args.killed is not None:
