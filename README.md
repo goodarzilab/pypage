@@ -84,7 +84,7 @@ pypage --draw-only -e example_data/test_DESeq_logFC.txt.gz \
 
 **Example output:**
 
-![pyPAGE heatmap](example_data/test_DESeq_logFC_PAGE/heatmap.png)
+![pyPAGE heatmap](docs/example_heatmap.png)
 
 ## Loading Gene Sets
 
