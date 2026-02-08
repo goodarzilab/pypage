@@ -15,8 +15,8 @@ pip install bio-pypage
 Or install from source:
 
 ```bash
-git clone https://github.com/goodarzilab/pypage
-cd pypage
+git clone https://github.com/goodarzilab/pyPAGE
+cd pyPAGE
 pip install -e .
 ```
 
@@ -240,8 +240,8 @@ p = PAGE(exp, gs, n_shuffle=100, n_jobs=1)
 
 ## Tutorials
 
-- **[Comprehensive Tutorial](notebooks/pypage_tutorial.ipynb)** — End-to-end walkthrough covering all features (GMT, GeneMapper, bulk PAGE, single-cell PAGE)
-- **[Bulk & SC Example](notebooks/pypage_bulk_and_sc_example.ipynb)** — Bulk and single-cell analysis demo
+- **[Comprehensive Tutorial](notebooks/pyPAGE_tutorial.ipynb)** — End-to-end walkthrough covering all features (GMT, GeneMapper, bulk PAGE, single-cell PAGE)
+- **[Bulk & SC Example](notebooks/pyPAGE_bulk_and_sc_example.ipynb)** — Bulk and single-cell analysis demo
 - **[Single-Cell Tutorial](notebooks/single_cell_page_tutorial.ipynb)** — Detailed single-cell PAGE walkthrough
 
 ## Testing

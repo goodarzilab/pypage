@@ -10,7 +10,7 @@ setup(
    author='Artemy Bakulin, Noam Teyssier',
    long_description=long_description,
    long_description_content_type="text/markdown",
-   url='https://github.com/goodarzilab/pypage',
+   url='https://github.com/goodarzilab/pyPAGE',
    author_email="logic2000.bakulin@gmail.com",
    packages=['pypage', 'pypage.io'],
    install_requires=open('requirements.txt').read().split(),
