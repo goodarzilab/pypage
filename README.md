@@ -441,8 +441,9 @@ p = PAGE(exp, gs, n_shuffle=100, n_jobs=1)
 ## Tutorials
 
 - **[Comprehensive Tutorial](notebooks/pyPAGE_tutorial.ipynb)** — End-to-end walkthrough covering all features (GMT, GeneMapper, bulk PAGE, single-cell PAGE)
-- **[Bulk & SC Example](notebooks/pyPAGE_bulk_and_sc_example.ipynb)** — Bulk and single-cell analysis demo
-- **[Single-Cell Tutorial](notebooks/single_cell_page_tutorial.ipynb)** — Detailed single-cell PAGE walkthrough
+- **[Bulk PAGE Tutorial](notebooks/bulk_page_tutorial.ipynb)** — DESeq2 log fold-change with Hallmark gene sets
+- **[Single-Cell PAGE Tutorial](notebooks/sc_page_tutorial.ipynb)** — CRC atlas from CELLxGENE with interactive report
+- **[Single-Cell PAGE (Synthetic)](notebooks/single_cell_page_tutorial.ipynb)** — Detailed walkthrough with synthetic data
 
 ## Testing
 
