@@ -7,6 +7,7 @@ Usage::
 """
 
 import argparse
+import os
 import sys
 
 import numpy as np
@@ -14,8 +15,11 @@ import pandas as pd
 
 from .io import GeneSets
 from .sc import SingleCellPAGE
-from .cli import _parse_manual
-from .plotting import plot_consistency_ranking, consistency_ranking_to_html
+from .cli import _parse_manual, _stem
+from .plotting import (
+    plot_consistency_ranking, consistency_ranking_to_html,
+    plot_pathway_embedding, interactive_report_to_html,
+)
 
 
 def _build_parser():
@@ -38,6 +42,10 @@ def _build_parser():
     parser.add_argument(
         "--genes",
         help="Gene names file (one per line). Required with --expression.",
+    )
+    parser.add_argument(
+        "--gene-column", default=None,
+        help="Column in adata.var containing gene symbols (default: use adata.var_names)",
     )
 
     # -- Gene sets ------------------------------------------------------------
@@ -85,8 +93,12 @@ def _build_parser():
 
     # -- Output ---------------------------------------------------------------
     parser.add_argument(
+        "--outdir", default=None,
+        help="Output directory (default: {input_stem}_scPAGE)",
+    )
+    parser.add_argument(
         "-o", "--output", default=None,
-        help="Output TSV path (default: stdout)",
+        help="Output TSV path (default: outdir/results.tsv)",
     )
     parser.add_argument(
         "--scores", default=None,
@@ -95,12 +107,12 @@ def _build_parser():
 
     # -- Visualization options ------------------------------------------------
     parser.add_argument(
-        "--heatmap", default=None,
-        help="Save consistency ranking plot (PNG/PDF/SVG)",
+        "--ranking-pdf", default=None,
+        help="Save consistency ranking bar chart as PDF (default: outdir/ranking.pdf)",
     )
     parser.add_argument(
-        "--html", default=None,
-        help="Save consistency ranking as standalone HTML",
+        "--ranking-html", default=None,
+        help="Save consistency ranking as standalone HTML (default: outdir/ranking.html)",
     )
     parser.add_argument(
         "--top-n", type=int, default=30,
@@ -113,6 +125,28 @@ def _build_parser():
     parser.add_argument(
         "--title", default="",
         help="Plot title",
+    )
+
+    # -- Interactive report & extra outputs -----------------------------------
+    parser.add_argument(
+        "--report", default=None,
+        help="Interactive HTML report path (default: outdir/report.html)",
+    )
+    parser.add_argument(
+        "--no-report", action="store_true", default=False,
+        help="Disable interactive report generation",
+    )
+    parser.add_argument(
+        "--no-save-adata", action="store_true", default=False,
+        help="Disable saving annotated AnnData with scPAGE scores",
+    )
+    parser.add_argument(
+        "--umap-top-n", type=int, default=10,
+        help="Number of top pathways for UMAP PDF plots (default: 10)",
+    )
+    parser.add_argument(
+        "--embedding-key", default=None,
+        help="Embedding key for UMAP plots (default: auto-detect X_umap > X_tsne > X_pca)",
     )
 
     # -- Draw-only mode -------------------------------------------------------
@@ -134,21 +168,92 @@ def _build_parser():
     return parser
 
 
+def _resolve_embedding_key(embeddings, requested_key):
+    """Pick the best available embedding key.
+
+    Parameters
+    ----------
+    embeddings : dict
+        Available embeddings from SingleCellPAGE.
+    requested_key : str or None
+        User-requested key, or None for auto-detection.
+
+    Returns
+    -------
+    str or None
+    """
+    if requested_key is not None:
+        return requested_key if requested_key in embeddings else None
+    for key in ('X_umap', 'X_tsne', 'X_pca'):
+        if key in embeddings:
+            return key
+    return None
+
+
+def _generate_umap_pdfs(sc, results, outdir, args):
+    """Generate per-pathway UMAP PDF plots for top pathways."""
+    emb_key = _resolve_embedding_key(sc.embeddings, args.embedding_key)
+    if emb_key is None:
+        return
+
+    embedding = sc.embeddings[emb_key]
+
+    # Select top pathways: FDR < threshold first, then by consistency
+    sig = results[results['FDR'] < args.fdr_threshold]
+    if len(sig) >= args.umap_top_n:
+        top_pw = sig.sort_values('consistency', ascending=False).head(args.umap_top_n)
+    else:
+        top_pw = results.sort_values('consistency', ascending=False).head(args.umap_top_n)
+
+    if len(top_pw) == 0:
+        return
+
+    umap_dir = os.path.join(outdir, "umap_plots")
+    os.makedirs(umap_dir, exist_ok=True)
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    pw_name_to_idx = {name: i for i, name in enumerate(sc.pathway_names)}
+
+    for _, row in top_pw.iterrows():
+        pw_name = row['pathway']
+        if pw_name not in pw_name_to_idx:
+            continue
+        idx = pw_name_to_idx[pw_name]
+        scores = sc.scores[:, idx]
+
+        fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+        plot_pathway_embedding(
+            scores=scores,
+            embedding=embedding,
+            pathway_name=pw_name,
+            ax=ax,
+        )
+        safe_name = pw_name.replace('/', '_').replace('\\', '_')
+        pdf_path = os.path.join(umap_dir, f"{safe_name}.pdf")
+        fig.savefig(pdf_path, bbox_inches='tight')
+        plt.close(fig)
+
+    print(f"UMAP plots saved to {umap_dir}/ ({len(top_pw)} pathways)", file=sys.stderr)
+
+
 def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
 
     # -- Validate conditional requirements ------------------------------------
     if args.draw_only:
-        if args.results is None:
-            parser.error("--results is required when using --draw-only")
+        if args.results is None and args.adata is None and args.expression is None:
+            parser.error("--results, --adata, or --expression is required when using --draw-only")
     else:
         if args.adata is None and args.expression is None:
             parser.error("one of --adata, --expression is required when not using --draw-only")
         if args.genesets is None and args.genesets_long is None and args.gmt is None:
             parser.error("one of -g/--genesets, --genesets-long, --gmt is required when not using --draw-only")
 
-    if args.expression is not None and args.genes is None:
+    if args.expression is not None and not args.draw_only and args.genes is None:
         parser.error("--genes is required when using --expression")
 
     # -- Seed -----------------------------------------------------------------
@@ -157,22 +262,65 @@ def main(argv=None):
 
     # -- Draw-only mode -------------------------------------------------------
     if args.draw_only:
+        # Determine outdir and results path
+        if args.results is not None:
+            source = args.results
+        elif args.adata is not None:
+            source = args.adata
+        else:
+            source = args.expression
+
+        if args.outdir is not None:
+            draw_outdir = args.outdir
+        else:
+            draw_outdir = _stem(source) + "_scPAGE"
+        os.makedirs(draw_outdir, exist_ok=True)
+
+        if args.results is None:
+            args.results = os.path.join(draw_outdir, "results.tsv")
+        if args.ranking_pdf is None:
+            args.ranking_pdf = os.path.join(draw_outdir, "ranking.pdf")
+        if args.ranking_html is None:
+            args.ranking_html = os.path.join(draw_outdir, "ranking.html")
+
         results = pd.read_csv(args.results, sep='\t')
-        if args.heatmap is not None:
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            ax = plot_consistency_ranking(
-                results, top_n=args.top_n, fdr_threshold=args.fdr_threshold)
-            if args.title:
-                ax.set_title(args.title)
-            ax.figure.savefig(args.heatmap, bbox_inches='tight')
-            plt.close(ax.figure)
-        if args.html is not None:
-            consistency_ranking_to_html(
-                results, args.html, top_n=args.top_n,
-                fdr_threshold=args.fdr_threshold, title=args.title)
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        ax = plot_consistency_ranking(
+            results, top_n=args.top_n, fdr_threshold=args.fdr_threshold)
+        if args.title:
+            ax.set_title(args.title)
+        ax.figure.savefig(args.ranking_pdf, bbox_inches='tight')
+        plt.close(ax.figure)
+        print(f"Ranking plot saved to {args.ranking_pdf}", file=sys.stderr)
+
+        consistency_ranking_to_html(
+            results, args.ranking_html, top_n=args.top_n,
+            fdr_threshold=args.fdr_threshold, title=args.title)
+        print(f"Ranking HTML saved to {args.ranking_html}", file=sys.stderr)
         return
+
+    # -- Set up output directory ----------------------------------------------
+    source_path = args.adata if args.adata is not None else args.expression
+    if args.outdir is not None:
+        outdir = args.outdir
+    else:
+        outdir = _stem(source_path) + "_scPAGE"
+    os.makedirs(outdir, exist_ok=True)
+
+    if args.output is None:
+        args.output = os.path.join(outdir, "results.tsv")
+    if args.ranking_pdf is None:
+        args.ranking_pdf = os.path.join(outdir, "ranking.pdf")
+    if args.ranking_html is None:
+        args.ranking_html = os.path.join(outdir, "ranking.html")
+    if args.report is None and not args.no_report:
+        args.report = os.path.join(outdir, "report.html")
+    save_adata_path = None
+    if not args.no_save_adata and args.adata is not None:
+        save_adata_path = os.path.join(outdir, "adata.h5ad")
 
     # -- Load expression ------------------------------------------------------
     adata = None
@@ -182,6 +330,14 @@ def main(argv=None):
     if args.adata is not None:
         import anndata
         adata = anndata.read_h5ad(args.adata)
+        if args.gene_column is not None:
+            if args.gene_column not in adata.var.columns:
+                parser.error(
+                    f"--gene-column '{args.gene_column}' not found in adata.var. "
+                    f"Available columns: {list(adata.var.columns)}"
+                )
+            adata.var_names = adata.var[args.gene_column].astype(str).values
+            adata.var_names_make_unique()
     else:
         expression = np.loadtxt(args.expression, delimiter="\t")
         with open(args.genes) as f:
@@ -219,10 +375,8 @@ def main(argv=None):
         results = sc.run(n_permutations=args.n_permutations)
 
     # -- Write results --------------------------------------------------------
-    if args.output is not None:
-        results.to_csv(args.output, sep="\t", index=False)
-    else:
-        results.to_csv(sys.stdout, sep="\t", index=False)
+    results.to_csv(args.output, sep="\t", index=False)
+    print(f"Results saved to {args.output}", file=sys.stderr)
 
     # -- Write per-cell scores ------------------------------------------------
     if args.scores is not None:
@@ -232,23 +386,57 @@ def main(argv=None):
             pathway_names_out = list(sc.pathway_names)
         scores_df = pd.DataFrame(sc.scores, columns=pathway_names_out)
         scores_df.to_csv(args.scores, sep="\t", index=False)
+        print(f"Scores saved to {args.scores}", file=sys.stderr)
+
+    # -- Add scores to adata.obs ----------------------------------------------
+    if adata is not None:
+        if args.manual is not None:
+            pw_names_out = pathway_names
+        else:
+            pw_names_out = list(sc.pathway_names)
+        for i, pw_name in enumerate(pw_names_out):
+            adata.obs[f"scPAGE_{pw_name}"] = sc.scores[:, i]
+
+    # -- Save annotated adata -------------------------------------------------
+    if save_adata_path is not None and adata is not None:
+        adata.write_h5ad(save_adata_path)
+        print(f"Annotated AnnData saved to {save_adata_path}", file=sys.stderr)
+
+    # -- UMAP PDFs for top pathways -------------------------------------------
+    _generate_umap_pdfs(sc, results, outdir, args)
 
     # -- Visualization --------------------------------------------------------
-    if args.heatmap is not None:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        ax = plot_consistency_ranking(
-            results, top_n=args.top_n, fdr_threshold=args.fdr_threshold)
-        if args.title:
-            ax.set_title(args.title)
-        ax.figure.savefig(args.heatmap, bbox_inches='tight')
-        plt.close(ax.figure)
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    ax = plot_consistency_ranking(
+        results, top_n=args.top_n, fdr_threshold=args.fdr_threshold)
+    if args.title:
+        ax.set_title(args.title)
+    ax.figure.savefig(args.ranking_pdf, bbox_inches='tight')
+    plt.close(ax.figure)
+    print(f"Ranking plot saved to {args.ranking_pdf}", file=sys.stderr)
 
-    if args.html is not None:
-        consistency_ranking_to_html(
-            results, args.html, top_n=args.top_n,
-            fdr_threshold=args.fdr_threshold, title=args.title)
+    consistency_ranking_to_html(
+        results, args.ranking_html, top_n=args.top_n,
+        fdr_threshold=args.fdr_threshold, title=args.title)
+    print(f"Ranking HTML saved to {args.ranking_html}", file=sys.stderr)
+
+    # -- Interactive report ---------------------------------------------------
+    if args.report and not args.no_report:
+        if sc.embeddings:
+            interactive_report_to_html(
+                results=results,
+                scores=sc.scores,
+                pathway_names=list(sc.pathway_names) if args.manual is None else pathway_names,
+                embeddings=sc.embeddings,
+                output_path=args.report,
+                fdr_threshold=args.fdr_threshold,
+                title=args.title or 'pyPAGE-SC Interactive Report',
+            )
+            print(f"Interactive report saved to {args.report}", file=sys.stderr)
+        else:
+            print("Skipping interactive report: no embeddings available", file=sys.stderr)
 
 
 if __name__ == "__main__":

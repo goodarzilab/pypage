@@ -211,23 +211,80 @@ Run `pypage --help` for a full list of options.
 
 ## Single-Cell Command Line
 
-After installation, `pypage-sc` is available for single-cell PAGE analysis:
+After installation, `pypage-sc` is available for single-cell PAGE analysis. It computes per-cell pathway scores using MI/CMI, tests spatial coherence on the cell-cell KNN graph via Geary's C, and produces an interactive VISION-like HTML report.
+
+### Basic Usage
 
 ```bash
 # With AnnData h5ad file
-pypage-sc --adata data.h5ad --gmt pathways.gmt -o results.tsv
+pypage-sc --adata data.h5ad --gmt pathways.gmt
 
 # With expression matrix + gene names
 pypage-sc --expression matrix.tsv --genes genes.txt --genesets-long ann.txt.gz
 
-# Full options
-pypage-sc --adata data.h5ad --gmt pathways.gmt \
-    --n-permutations 1000 --n-neighbors 30 --n-jobs 4 \
-    -o results.tsv --scores scores.tsv
+# If adata.var_names are Ensembl IDs and gene symbols are in a column
+pypage-sc --adata data.h5ad --gene-column gene --gmt pathways.gmt
 
 # Manual mode (bypass permutation testing)
 pypage-sc --adata data.h5ad --gmt pathways.gmt \
-    --manual "apoptotic process,cell cycle" -o manual_results.tsv
+    --manual "HALLMARK_INTERFERON_ALPHA_RESPONSE,HALLMARK_G2M_CHECKPOINT"
+```
+
+### Example: Colorectal Cancer (CRC) Atlas
+
+This example uses a CRC scRNA-seq dataset from [CZ CELLxGENE](https://datasets.cellxgene.cziscience.com/d6742179-6c5f-4ddc-8327-b6719b157abd.h5ad) (13,843 cells) with Hallmark gene sets. Since the AnnData uses Ensembl IDs as `var_names`, the `--gene-column` flag maps to gene symbols stored in `adata.var['gene']`.
+
+```bash
+pypage-sc --adata CRC.h5ad --gene-column gene \
+    --gmt h.all.v2026.1.Hs.symbols.gmt --seed 42 --n-jobs 4
+```
+
+This creates the output directory `CRC_scPAGE/` with:
+
+```
+CRC_scPAGE/
+  results.tsv          # pathway results (consistency, p-value, FDR)
+  ranking.pdf          # consistency ranking bar chart
+  ranking.html         # interactive ranking bars
+  report.html          # VISION-like interactive report
+  adata.h5ad           # AnnData with scPAGE_ scores in .obs
+  umap_plots/          # per-pathway UMAP PDFs (top 10)
+    HALLMARK_INTERFERON_ALPHA_RESPONSE.pdf
+    ...
+```
+
+The top pathway is **HALLMARK_INTERFERON_ALPHA_RESPONSE** (consistency C' = 0.52, FDR = 0.005), showing strong spatial coherence of interferon signaling across the cell manifold.
+
+**`report.html`** is a fully self-contained interactive report (no external dependencies). Open it in any browser to:
+- Browse all pathways in a searchable sidebar, sorted by consistency
+- Click a pathway to color the UMAP by per-cell scores
+- Switch between available embeddings (UMAP, t-SNE, PCA)
+
+**`adata.h5ad`** contains all pathway scores as `scPAGE_*` columns in `adata.obs`, ready for downstream analysis with scanpy:
+
+```python
+import scanpy as sc
+adata = sc.read_h5ad("CRC_scPAGE/adata.h5ad")
+sc.pl.umap(adata, color="scPAGE_HALLMARK_INTERFERON_ALPHA_RESPONSE")
+```
+
+### Output Control
+
+```bash
+# Disable interactive report
+pypage-sc --adata data.h5ad --gmt pathways.gmt --no-report
+
+# Disable saving annotated AnnData
+pypage-sc --adata data.h5ad --gmt pathways.gmt --no-save-adata
+
+# Change number of UMAP PDF plots
+pypage-sc --adata data.h5ad --gmt pathways.gmt --umap-top-n 20
+
+# Specify embedding for UMAP plots
+pypage-sc --adata data.h5ad --gmt pathways.gmt --embedding-key X_tsne
+
+# Save per-cell scores matrix as TSV
+pypage-sc --adata data.h5ad --gmt pathways.gmt --scores scores.tsv
 ```
 
 Run `pypage-sc --help` for a full list of options.

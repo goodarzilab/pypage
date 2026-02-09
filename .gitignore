@@ -132,3 +132,10 @@ dmypy.json
 
 # DOCS
 docs/generated/**
+
+# macOS
+.DS_Store
+
+# Large test data / generated outputs
+tests/CRC.h5ad
+tests/CRC_scPAGE/

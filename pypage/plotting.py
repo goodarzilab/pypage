@@ -1,9 +1,10 @@
 """Visualization functions for single-cell PAGE results."""
 
+import json
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from typing import Optional
+from typing import Optional, Dict, List
 
 
 def plot_pathway_embedding(
@@ -274,3 +275,375 @@ function hideTip() { tip.style.display='none'; }
 
     with open(output_path, "w") as f:
         f.write("\n".join(html_parts))
+
+
+def _generate_viridis_lut(n=256):
+    """Generate a viridis colormap lookup table as a list of [R, G, B] ints.
+
+    Uses matplotlib's viridis colormap at build time so the HTML report
+    has no runtime dependency on matplotlib.
+    """
+    from matplotlib.cm import get_cmap
+    cmap = get_cmap('viridis', n)
+    lut = []
+    for i in range(n):
+        r, g, b, _ = cmap(i / (n - 1))
+        lut.append([int(r * 255), int(g * 255), int(b * 255)])
+    return lut
+
+
+def interactive_report_to_html(
+    results,
+    scores,
+    pathway_names,
+    embeddings,
+    output_path,
+    fdr_threshold=0.05,
+    title='pyPAGE-SC Interactive Report',
+):
+    """Generate a self-contained interactive HTML report (VISION-like).
+
+    The report includes a sidebar with clickable pathway list, a canvas
+    scatter plot colored by per-cell pathway scores, embedding tabs,
+    search filtering, and a viridis color legend. No external dependencies.
+
+    Parameters
+    ----------
+    results : pd.DataFrame
+        From SingleCellPAGE.run(), with 'pathway', 'consistency', 'FDR'.
+    scores : np.ndarray
+        Shape (n_cells, n_pathways) with per-cell pathway scores.
+    pathway_names : array-like
+        Pathway names matching columns of scores.
+    embeddings : dict
+        Mapping of embedding name (e.g. 'X_umap') to (n_cells, 2) arrays.
+    output_path : str
+        Path to write the HTML file.
+    fdr_threshold : float
+        FDR threshold for significance highlighting.
+    title : str
+        Report title.
+    """
+    pathway_names = list(pathway_names)
+    n_cells = scores.shape[0]
+
+    # Build pathway metadata sorted by consistency
+    df = results.sort_values('consistency', ascending=False)
+    pathways_json = []
+    for _, row in df.iterrows():
+        pathways_json.append({
+            'name': row['pathway'],
+            'consistency': round(float(row['consistency']), 6),
+            'pvalue': round(float(row.get('p-value', float('nan'))), 6),
+            'fdr': round(float(row.get('FDR', float('nan'))), 6),
+        })
+
+    # Build embeddings dict with rounded coordinates
+    embeddings_json = {}
+    for key, coords in embeddings.items():
+        coords = np.asarray(coords)
+        embeddings_json[key] = {
+            'x': np.round(coords[:, 0], 4).tolist(),
+            'y': np.round(coords[:, 1], 4).tolist(),
+        }
+
+    # Build scores dict (only for pathways in results)
+    pw_name_to_idx = {name: i for i, name in enumerate(pathway_names)}
+    scores_json = {}
+    for pw_info in pathways_json:
+        name = pw_info['name']
+        if name in pw_name_to_idx:
+            idx = pw_name_to_idx[name]
+            scores_json[name] = np.round(scores[:, idx], 6).tolist()
+
+    # Viridis LUT
+    viridis_lut = _generate_viridis_lut(256)
+
+    data_obj = {
+        'pathways': pathways_json,
+        'embeddings': embeddings_json,
+        'scores': scores_json,
+        'n_cells': n_cells,
+        'fdr_threshold': fdr_threshold,
+    }
+
+    data_json = json.dumps(data_obj, separators=(',', ':'))
+    viridis_json = json.dumps(viridis_lut)
+
+    embedding_keys = list(embeddings.keys())
+    default_embedding = embedding_keys[0] if embedding_keys else ''
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{title}</title>
+<style>
+* {{ margin:0; padding:0; box-sizing:border-box; }}
+body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background:#f8f9fa; color:#333; height:100vh; display:flex; flex-direction:column; }}
+
+/* Title bar */
+.title-bar {{ background:#1a1a2e; color:#fff; padding:10px 20px; font-size:16px;
+  font-weight:600; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; }}
+.title-bar .subtitle {{ font-size:12px; color:#aaa; font-weight:400; }}
+
+/* Main layout */
+.main {{ display:flex; flex:1; overflow:hidden; }}
+
+/* Sidebar */
+.sidebar {{ width:320px; min-width:260px; background:#fff; border-right:1px solid #ddd;
+  display:flex; flex-direction:column; flex-shrink:0; }}
+.sidebar-header {{ padding:10px 12px; border-bottom:1px solid #eee; }}
+.search-input {{ width:100%; padding:7px 10px; border:1px solid #ccc; border-radius:4px;
+  font-size:13px; outline:none; }}
+.search-input:focus {{ border-color:#4a90d9; }}
+.pathway-list {{ flex:1; overflow-y:auto; }}
+.pw-item {{ padding:8px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0;
+  font-size:12px; display:flex; justify-content:space-between; align-items:center; }}
+.pw-item:hover {{ background:#f0f4ff; }}
+.pw-item.active {{ background:#e3ecf7; font-weight:600; }}
+.pw-item.sig .pw-name {{ color:#2166ac; }}
+.pw-name {{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px; }}
+.pw-stat {{ font-size:11px; color:#888; white-space:nowrap; }}
+
+/* Content area */
+.content {{ flex:1; display:flex; flex-direction:column; padding:12px; overflow:hidden; }}
+.tab-bar {{ display:flex; gap:4px; margin-bottom:8px; flex-shrink:0; }}
+.tab-btn {{ padding:5px 14px; border:1px solid #ccc; border-radius:4px 4px 0 0;
+  background:#eee; cursor:pointer; font-size:12px; }}
+.tab-btn.active {{ background:#fff; border-bottom-color:#fff; font-weight:600; }}
+.canvas-wrap {{ flex:1; position:relative; background:#fff; border:1px solid #ddd; border-radius:4px;
+  overflow:hidden; }}
+canvas {{ display:block; }}
+
+/* Legend */
+.legend {{ display:flex; align-items:center; gap:8px; padding:8px 0; flex-shrink:0; }}
+.legend-gradient {{ width:200px; height:14px; border:1px solid #ccc; border-radius:2px; }}
+.legend-label {{ font-size:11px; color:#666; }}
+
+/* Info panel */
+.info-panel {{ font-size:12px; color:#555; padding:6px 0; flex-shrink:0; }}
+.info-panel b {{ color:#333; }}
+
+/* No embedding message */
+.no-data {{ display:flex; align-items:center; justify-content:center; flex:1;
+  color:#999; font-size:14px; }}
+</style>
+</head>
+<body>
+
+<div class="title-bar">
+  <span>{title}</span>
+  <span class="subtitle">pyPAGE single-cell &middot; {n_cells:,} cells &middot; {len(pathways_json)} pathways</span>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <input type="text" class="search-input" id="search" placeholder="Search pathways..." autocomplete="off">
+    </div>
+    <div class="pathway-list" id="pwList"></div>
+  </div>
+  <div class="content">
+    <div class="tab-bar" id="tabBar"></div>
+    <div class="info-panel" id="infoPanel">Select a pathway from the sidebar.</div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="scatter"></canvas>
+    </div>
+    <div class="legend" id="legendBar">
+      <span class="legend-label" id="legendMin"></span>
+      <canvas class="legend-gradient" id="legendGrad" width="200" height="14"></canvas>
+      <span class="legend-label" id="legendMax"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {{
+"use strict";
+var DATA = {data_json};
+var VIRIDIS = {viridis_json};
+var embKeys = {json.dumps(embedding_keys)};
+var curEmb = "{default_embedding}";
+var curPw = null;
+var dpr = window.devicePixelRatio || 1;
+
+// DOM refs
+var canvas = document.getElementById('scatter');
+var ctx = canvas.getContext('2d');
+var wrap = document.getElementById('canvasWrap');
+var pwList = document.getElementById('pwList');
+var searchInput = document.getElementById('search');
+var tabBar = document.getElementById('tabBar');
+var infoPanel = document.getElementById('infoPanel');
+var legendMin = document.getElementById('legendMin');
+var legendMax = document.getElementById('legendMax');
+var legendGrad = document.getElementById('legendGrad');
+
+// Draw legend gradient once
+(function() {{
+  var gctx = legendGrad.getContext('2d');
+  for (var i = 0; i < 200; i++) {{
+    var ci = Math.round(i / 199 * 255);
+    var c = VIRIDIS[ci];
+    gctx.fillStyle = 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+    gctx.fillRect(i, 0, 1, 14);
+  }}
+}})();
+
+// Build tab bar
+embKeys.forEach(function(key) {{
+  var btn = document.createElement('div');
+  btn.className = 'tab-btn' + (key === curEmb ? ' active' : '');
+  btn.textContent = key.replace('X_', '').toUpperCase();
+  btn.onclick = function() {{
+    curEmb = key;
+    document.querySelectorAll('.tab-btn').forEach(function(b) {{ b.className = 'tab-btn'; }});
+    btn.className = 'tab-btn active';
+    draw();
+  }};
+  tabBar.appendChild(btn);
+}});
+
+// Build pathway list
+function buildList(filter) {{
+  pwList.innerHTML = '';
+  var lc = (filter || '').toLowerCase();
+  DATA.pathways.forEach(function(pw) {{
+    if (lc && pw.name.toLowerCase().indexOf(lc) === -1) return;
+    var div = document.createElement('div');
+    div.className = 'pw-item' + (pw.fdr < DATA.fdr_threshold ? ' sig' : '') +
+      (curPw === pw.name ? ' active' : '');
+    div.innerHTML = '<span class="pw-name" title="' + pw.name + '">' + pw.name + '</span>' +
+      '<span class="pw-stat">C\\u2032=' + pw.consistency.toFixed(3) + '</span>';
+    div.onclick = function() {{ selectPw(pw.name); }};
+    pwList.appendChild(div);
+  }});
+}}
+buildList('');
+
+searchInput.addEventListener('input', function() {{ buildList(this.value); }});
+
+function selectPw(name) {{
+  curPw = name;
+  buildList(searchInput.value);
+  // Update info panel
+  var pw = DATA.pathways.find(function(p) {{ return p.name === name; }});
+  if (pw) {{
+    var sigLabel = pw.fdr < DATA.fdr_threshold
+      ? '<span style="color:#2166ac;font-weight:600">Significant</span>'
+      : '<span style="color:#d6604d">Not significant</span>';
+    infoPanel.innerHTML = '<b>' + pw.name + '</b> &nbsp; C\\u2032=' +
+      pw.consistency.toFixed(4) + ' &nbsp; p=' + pw.pvalue.toFixed(4) +
+      ' &nbsp; FDR=' + pw.fdr.toFixed(4) + ' &nbsp; ' + sigLabel;
+  }}
+  draw();
+}}
+
+// Resize canvas
+function resizeCanvas() {{
+  var rect = wrap.getBoundingClientRect();
+  canvas.width = Math.floor(rect.width * dpr);
+  canvas.height = Math.floor(rect.height * dpr);
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = rect.height + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}}
+
+function draw() {{
+  resizeCanvas();
+  var w = canvas.width / dpr;
+  var h = canvas.height / dpr;
+  ctx.clearRect(0, 0, w, h);
+
+  if (!curEmb || !DATA.embeddings[curEmb]) {{
+    ctx.fillStyle = '#999';
+    ctx.font = '14px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No embedding available', w / 2, h / 2);
+    return;
+  }}
+
+  var emb = DATA.embeddings[curEmb];
+  var xs = emb.x, ys = emb.y;
+  var n = xs.length;
+
+  // Compute bounds with padding
+  var xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity;
+  for (var i = 0; i < n; i++) {{
+    if (xs[i] < xmin) xmin = xs[i];
+    if (xs[i] > xmax) xmax = xs[i];
+    if (ys[i] < ymin) ymin = ys[i];
+    if (ys[i] > ymax) ymax = ys[i];
+  }}
+  var pad = 20;
+  var xrange = xmax - xmin || 1;
+  var yrange = ymax - ymin || 1;
+  var scale = Math.min((w - 2 * pad) / xrange, (h - 2 * pad) / yrange);
+  var ox = pad + ((w - 2 * pad) - xrange * scale) / 2;
+  var oy = pad + ((h - 2 * pad) - yrange * scale) / 2;
+
+  // Point size based on cell count
+  var r = Math.max(1, Math.min(4, 800 / Math.sqrt(n)));
+
+  if (!curPw || !DATA.scores[curPw]) {{
+    // Grey dots when no pathway selected
+    ctx.fillStyle = 'rgba(150,150,150,0.4)';
+    for (var i = 0; i < n; i++) {{
+      var px = ox + (xs[i] - xmin) * scale;
+      var py = oy + (ys[i] - ymin) * scale;
+      ctx.beginPath();
+      ctx.arc(px, py, r, 0, 6.283);
+      ctx.fill();
+    }}
+    legendMin.textContent = '';
+    legendMax.textContent = '';
+    return;
+  }}
+
+  var vals = DATA.scores[curPw];
+  var vmin = Infinity, vmax = -Infinity;
+  for (var i = 0; i < n; i++) {{
+    if (vals[i] < vmin) vmin = vals[i];
+    if (vals[i] > vmax) vmax = vals[i];
+  }}
+  var vrange = vmax - vmin || 1;
+
+  legendMin.textContent = vmin.toFixed(4);
+  legendMax.textContent = vmax.toFixed(4);
+
+  // Build sorted indices (low scores first so high scores draw on top)
+  var order = new Array(n);
+  for (var i = 0; i < n; i++) order[i] = i;
+  order.sort(function(a, b) {{ return vals[a] - vals[b]; }});
+
+  // Draw points
+  for (var j = 0; j < n; j++) {{
+    var i = order[j];
+    var px = ox + (xs[i] - xmin) * scale;
+    var py = oy + (ys[i] - ymin) * scale;
+    var ci = Math.round((vals[i] - vmin) / vrange * 255);
+    if (ci < 0) ci = 0;
+    if (ci > 255) ci = 255;
+    var c = VIRIDIS[ci];
+    ctx.fillStyle = 'rgb(' + c[0] + ',' + c[1] + ',' + c[2] + ')';
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, 6.283);
+    ctx.fill();
+  }}
+}}
+
+// Auto-select first pathway
+if (DATA.pathways.length > 0) {{
+  selectPw(DATA.pathways[0].name);
+}}
+
+window.addEventListener('resize', draw);
+}})();
+</script>
+</body>
+</html>"""
+
+    with open(output_path, 'w') as f:
+        f.write(html)
