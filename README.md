@@ -4,6 +4,27 @@
 
 It is designed to infer differential activity of pathways and regulons while accounting for annotation and membership biases using information-theoretic methods.
 
+## Approach
+
+### Bulk PAGE
+
+Standard gene-set enrichment methods test whether pathway members are non-randomly distributed across a ranked gene list. pyPAGE frames this as an information-theoretic question: **how much does knowing a gene's pathway membership tell you about its expression bin?**
+
+1. **Discretize** continuous expression scores (e.g. log2 fold-change) into equal-frequency bins
+2. **Compute mutual information (MI)** between expression bins and pathway membership — or **conditional MI (CMI)**, which conditions on how many pathways each gene belongs to, correcting for the bias that heavily-annotated genes drive spurious enrichment
+3. **Permutation test** to assess significance, with early stopping
+4. **Redundancy filtering** removes pathways whose signal is explained by an already-accepted pathway (via CMI between memberships)
+5. **Hypergeometric enrichment** per bin produces the iPAGE-style heatmap showing *which* expression bins drive each pathway's signal
+
+### Single-Cell PAGE
+
+For single-cell data, the question becomes: **are pathway scores spatially coherent across the cell manifold?** A pathway whose activity varies smoothly across cell states (rather than randomly) is biologically meaningful.
+
+1. **Per-cell scoring** — for each cell, compute MI or CMI between gene expression bins and pathway membership across all genes. This produces an (n_cells x n_pathways) score matrix
+2. **KNN graph** — build a cell-cell k-nearest-neighbor graph from expression (or use a precomputed one from scanpy)
+3. **Geary's C** — measure spatial autocorrelation of each pathway's scores on the KNN graph. Report C' = 1 - C, where higher values mean the pathway varies coherently across the manifold rather than randomly
+4. **Permutation test** — generate size-matched random gene sets, compute their C', and derive empirical p-values with BH FDR correction
+
 ## Installation
 
 Install from PyPI:
