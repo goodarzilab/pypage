@@ -239,14 +239,139 @@ def _generate_umap_pdfs(sc, results, outdir, args):
     print(f"UMAP plots saved to {umap_dir}/ ({len(top_pw)} pathways)", file=sys.stderr)
 
 
+def _extract_draw_only_data(adata_path, gene_column=None):
+    """Extract scores, embeddings, and metadata from a saved adata.h5ad.
+
+    Parameters
+    ----------
+    adata_path : str
+        Path to the annotated AnnData file.
+    gene_column : str, optional
+        Column in adata.var to use as gene names.
+
+    Returns
+    -------
+    scores : np.ndarray
+        Shape (n_cells, n_pathways).
+    pw_names : list of str
+        Pathway names extracted from scPAGE_ columns.
+    embeddings : dict
+        Mapping of embedding key to (n_cells, 2) arrays.
+    metadata : dict
+        Mapping of column name to list of string values.
+    """
+    import anndata
+    adata = anndata.read_h5ad(adata_path)
+    if gene_column:
+        adata.var_names = adata.var[gene_column].astype(str).values
+        adata.var_names_make_unique()
+
+    # Extract scPAGE_ columns
+    scpage_cols = [c for c in adata.obs.columns if c.startswith("scPAGE_")]
+    pw_names = [c.replace("scPAGE_", "", 1) for c in scpage_cols]
+    scores = adata.obs[scpage_cols].values  # (n_cells, n_pathways)
+
+    # Extract embeddings
+    embeddings = {}
+    for key in ('X_umap', 'X_tsne', 'X_pca'):
+        if key in adata.obsm:
+            embeddings[key] = np.asarray(adata.obsm[key])
+
+    # Extract categorical metadata
+    metadata = {}
+    for col in adata.obs.columns:
+        if col.startswith("scPAGE_"):
+            continue
+        if adata.obs[col].dtype.name == 'category' or adata.obs[col].dtype == object:
+            metadata[col] = adata.obs[col].astype(str).tolist()
+
+    return scores, pw_names, embeddings, metadata
+
+
+def _build_pathway_genes(args):
+    """Build pathway_genes dict from gene set files if provided.
+
+    Returns
+    -------
+    dict or None
+        Mapping of pathway name to list of gene names, or None.
+    """
+    if args.genesets is not None:
+        gs = GeneSets(ann_file=args.genesets)
+    elif args.genesets_long is not None:
+        ann = pd.read_csv(
+            args.genesets_long, sep="\t", header=None,
+            names=["gene", "pathway"],
+        )
+        gs = GeneSets(ann["gene"], ann["pathway"])
+    elif args.gmt is not None:
+        gs = GeneSets.from_gmt(args.gmt)
+    else:
+        return None
+
+    pathway_genes = {}
+    for pw_idx, pw_name in enumerate(gs.pathways):
+        gene_mask = gs.bool_array[pw_idx] > 0
+        pathway_genes[pw_name] = sorted(gs.genes[gene_mask].tolist())
+    return pathway_genes
+
+
+def _generate_umap_pdfs_from_arrays(scores, pw_names, embeddings, results, outdir, args):
+    """Generate UMAP PDFs from pre-extracted arrays (for draw-only mode)."""
+    emb_key = _resolve_embedding_key(embeddings, args.embedding_key)
+    if emb_key is None:
+        return
+
+    embedding = embeddings[emb_key]
+
+    sig = results[results['FDR'] < args.fdr_threshold]
+    if len(sig) >= args.umap_top_n:
+        top_pw = sig.sort_values('consistency', ascending=False).head(args.umap_top_n)
+    else:
+        top_pw = results.sort_values('consistency', ascending=False).head(args.umap_top_n)
+
+    if len(top_pw) == 0:
+        return
+
+    umap_dir = os.path.join(outdir, "umap_plots")
+    os.makedirs(umap_dir, exist_ok=True)
+
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    pw_name_to_idx = {name: i for i, name in enumerate(pw_names)}
+
+    for _, row in top_pw.iterrows():
+        pw_name = row['pathway']
+        if pw_name not in pw_name_to_idx:
+            continue
+        idx = pw_name_to_idx[pw_name]
+        pw_scores = scores[:, idx]
+
+        fig, ax = plt.subplots(1, 1, figsize=(6, 5))
+        plot_pathway_embedding(
+            scores=pw_scores,
+            embedding=embedding,
+            pathway_name=pw_name,
+            ax=ax,
+        )
+        safe_name = pw_name.replace('/', '_').replace('\\', '_')
+        pdf_path = os.path.join(umap_dir, f"{safe_name}.pdf")
+        fig.savefig(pdf_path, bbox_inches='tight')
+        plt.close(fig)
+
+    print(f"UMAP plots saved to {umap_dir}/ ({len(top_pw)} pathways)", file=sys.stderr)
+
+
 def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
 
     # -- Validate conditional requirements ------------------------------------
     if args.draw_only:
-        if args.results is None and args.adata is None and args.expression is None:
-            parser.error("--results, --adata, or --expression is required when using --draw-only")
+        if args.results is None and args.adata is None and args.expression is None and args.outdir is None:
+            parser.error("--outdir, --results, --adata, or --expression is required when using --draw-only")
     else:
         if args.adata is None and args.expression is None:
             parser.error("one of --adata, --expression is required when not using --draw-only")
@@ -263,17 +388,14 @@ def main(argv=None):
     # -- Draw-only mode -------------------------------------------------------
     if args.draw_only:
         # Determine outdir and results path
-        if args.results is not None:
-            source = args.results
-        elif args.adata is not None:
-            source = args.adata
-        else:
-            source = args.expression
-
         if args.outdir is not None:
             draw_outdir = args.outdir
+        elif args.results is not None:
+            draw_outdir = os.path.dirname(args.results) or "."
+        elif args.adata is not None:
+            draw_outdir = _stem(args.adata) + "_scPAGE"
         else:
-            draw_outdir = _stem(source) + "_scPAGE"
+            draw_outdir = _stem(args.expression) + "_scPAGE"
         os.makedirs(draw_outdir, exist_ok=True)
 
         if args.results is None:
@@ -282,9 +404,12 @@ def main(argv=None):
             args.ranking_pdf = os.path.join(draw_outdir, "ranking.pdf")
         if args.ranking_html is None:
             args.ranking_html = os.path.join(draw_outdir, "ranking.html")
+        if args.report is None and not args.no_report:
+            args.report = os.path.join(draw_outdir, "report.html")
 
         results = pd.read_csv(args.results, sep='\t')
 
+        # Generate ranking plots (always)
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
@@ -300,6 +425,38 @@ def main(argv=None):
             results, args.ranking_html, top_n=args.top_n,
             fdr_threshold=args.fdr_threshold, title=args.title)
         print(f"Ranking HTML saved to {args.ranking_html}", file=sys.stderr)
+
+        # Try to load adata for report + UMAP PDFs
+        adata_path = args.adata or os.path.join(draw_outdir, "adata.h5ad")
+        if os.path.exists(adata_path):
+            scores, pw_names, embeddings, metadata = _extract_draw_only_data(
+                adata_path, gene_column=args.gene_column)
+
+            # Build pathway_genes from gene sets if provided
+            pathway_genes = _build_pathway_genes(args)
+
+            # Generate UMAP PDFs
+            if embeddings:
+                _generate_umap_pdfs_from_arrays(
+                    scores, pw_names, embeddings, results, draw_outdir, args)
+
+            # Generate interactive report
+            if args.report and not args.no_report and embeddings:
+                interactive_report_to_html(
+                    results=results,
+                    scores=scores,
+                    pathway_names=pw_names,
+                    embeddings=embeddings,
+                    output_path=args.report,
+                    fdr_threshold=args.fdr_threshold,
+                    title=args.title or 'pyPAGE-SC Interactive Report',
+                    pathway_genes=pathway_genes,
+                    metadata=metadata,
+                )
+                print(f"Interactive report saved to {args.report}", file=sys.stderr)
+        else:
+            print(f"No adata.h5ad found at {adata_path}; only regenerating ranking plots",
+                  file=sys.stderr)
         return
 
     # -- Set up output directory ----------------------------------------------
@@ -425,14 +582,33 @@ def main(argv=None):
     # -- Interactive report ---------------------------------------------------
     if args.report and not args.no_report:
         if sc.embeddings:
+            # Build pathway_genes dict from GeneSets
+            pathway_genes = {}
+            pw_names_for_report = list(sc.pathway_names) if args.manual is None else pathway_names
+            for i, pw_name in enumerate(sc.pathway_names):
+                gene_mask = sc.ont_bool[i] > 0
+                pathway_genes[pw_name] = list(sc.shared_genes[gene_mask])
+
+            # Build metadata dict from adata.obs categorical columns
+            report_metadata = None
+            if adata is not None:
+                report_metadata = {}
+                for col in adata.obs.columns:
+                    if col.startswith("scPAGE_"):
+                        continue
+                    if adata.obs[col].dtype.name == 'category' or adata.obs[col].dtype == object:
+                        report_metadata[col] = adata.obs[col].astype(str).tolist()
+
             interactive_report_to_html(
                 results=results,
                 scores=sc.scores,
-                pathway_names=list(sc.pathway_names) if args.manual is None else pathway_names,
+                pathway_names=pw_names_for_report,
                 embeddings=sc.embeddings,
                 output_path=args.report,
                 fdr_threshold=args.fdr_threshold,
                 title=args.title or 'pyPAGE-SC Interactive Report',
+                pathway_genes=pathway_genes,
+                metadata=report_metadata,
             )
             print(f"Interactive report saved to {args.report}", file=sys.stderr)
         else:
