@@ -47,6 +47,13 @@ class SingleCellPAGE:
         capped at 100.
     n_bins : int, optional
         Number of bins for expression discretization. Default: 10.
+    bin_axis : str, optional
+        Discretization axis: 'cell' (per-cell across genes, VISION-like)
+        or 'gene' (per-gene across cells). Default: 'cell'.
+    permutation_chunk_size : int, optional
+        Number of random gene sets to process per permutation chunk.
+        Lower values reduce peak memory; default is an automatic
+        memory-aware chunk size.
     connectivity : scipy.sparse matrix, optional
         Precomputed cell-cell connectivity matrix.
     function : str, optional
@@ -66,16 +73,28 @@ class SingleCellPAGE:
         n_bins=10,
         connectivity=None,
         function='cmi',
+        bin_axis='cell',
+        permutation_chunk_size=None,
         n_jobs=1,
     ):
         if genesets is None:
             raise ValueError("genesets is required")
         if function not in ('mi', 'cmi'):
             raise ValueError(f"function must be 'mi' or 'cmi', got {function!r}")
+        if bin_axis not in ('cell', 'gene'):
+            raise ValueError(f"bin_axis must be 'cell' or 'gene', got {bin_axis!r}")
+        if permutation_chunk_size is not None and int(permutation_chunk_size) <= 0:
+            raise ValueError(
+                f"permutation_chunk_size must be > 0 when provided, got {permutation_chunk_size!r}"
+            )
 
         self.genesets = genesets
         self.n_bins = n_bins
         self.function = function
+        self.bin_axis = bin_axis
+        self.permutation_chunk_size = (
+            None if permutation_chunk_size is None else int(permutation_chunk_size)
+        )
         self.n_jobs = n_jobs
         self.embeddings = {}
 
@@ -197,14 +216,7 @@ class SingleCellPAGE:
             Shape (n_cells, n_pathways) with information scores.
         """
         expr_subset = self.expression_matrix[:, self._expr_idxs]
-
-        # Create ExpressionProfile for 2D data to handle discretization
-        ep = ExpressionProfile(
-            self.shared_genes,
-            expr_subset,
-            n_bins=self.n_bins,
-        )
-        exp_bins = ep.get_gene_subset(self.shared_genes)
+        exp_bins = self._discretize_expression(expr_subset)
         # exp_bins shape: (n_cells, n_shared_genes)
 
         x_bins = int(exp_bins.max()) + 1
@@ -274,10 +286,7 @@ class SingleCellPAGE:
 
         # Pre-compute discretized expression (same as _score_pathways)
         expr_subset = self.expression_matrix[:, self._expr_idxs]
-        ep = ExpressionProfile(
-            self.shared_genes, expr_subset, n_bins=self.n_bins
-        )
-        exp_bins = ep.get_gene_subset(self.shared_genes)
+        exp_bins = self._discretize_expression(expr_subset)
         x_bins = int(exp_bins.max()) + 1
         y_bins = 2  # binary membership
         z_bins = int(self.membership_bins.max()) + 1
@@ -289,36 +298,50 @@ class SingleCellPAGE:
         W_indptr = self.W.indptr.astype(np.int64)
         W_data = self.W.data.astype(np.float64)
 
+        if n_permutations <= 0:
+            raise ValueError(f"n_permutations must be > 0, got {n_permutations}")
+
+        # Keep random membership matrix chunks near ~256 MB by default.
+        bytes_per_perm = max(n_shared * 4, 1)  # int32 matrix
+        auto_chunk = max(1, int((256 * 1024 * 1024) // bytes_per_perm))
+        chunk_size = self.permutation_chunk_size or min(n_permutations, auto_chunk)
+        chunk_size = max(1, min(int(chunk_size), n_permutations))
+
         for size in tqdm(unique_sizes, desc="permutation testing"):
             size = int(size)
             pw_idxs = size_to_pathways[size]
+            exceed_counts = np.zeros(len(pw_idxs), dtype=np.int64)
 
-            # Generate all random gene sets at once: (n_permutations, n_shared)
-            rand_bools = np.zeros((n_permutations, n_shared), dtype=np.int32)
-            for perm in range(n_permutations):
-                genes = np.random.choice(n_shared, size=size, replace=False)
-                rand_bools[perm, genes] = 1
+            for start in range(0, n_permutations, chunk_size):
+                end = min(start + chunk_size, n_permutations)
+                n_chunk = end - start
 
-            # One batch JIT call: (n_cells, n_permutations) score matrix
-            if self.function == 'mi':
-                rand_scores = batch_mutual_information_2d(
-                    exp_bins_i32, rand_bools, x_bins, y_bins)
-            else:
-                rand_scores = batch_conditional_mutual_information_2d(
-                    exp_bins_i32, rand_bools, membership,
-                    x_bins, y_bins, z_bins)
+                # Generate random gene sets for this chunk: (n_chunk, n_shared)
+                rand_bools = np.zeros((n_chunk, n_shared), dtype=np.int32)
+                for perm in range(n_chunk):
+                    genes = np.random.choice(n_shared, size=size, replace=False)
+                    rand_bools[perm, genes] = 1
 
-            # Batch Geary's C for all permutations
-            null_c_primes = geary_c_batch(
-                rand_scores, W_indices, W_indptr, W_data, self.n_cells)
+                # One batch JIT call: (n_cells, n_chunk) score matrix
+                if self.function == 'mi':
+                    rand_scores = batch_mutual_information_2d(
+                        exp_bins_i32, rand_bools, x_bins, y_bins)
+                else:
+                    rand_scores = batch_conditional_mutual_information_2d(
+                        exp_bins_i32, rand_bools, membership,
+                        x_bins, y_bins, z_bins)
 
-            # Compute p-values for all pathways of this size
-            for p_idx in pw_idxs:
-                observed = self.consistency[p_idx]
-                pvalues[p_idx] = (
-                    (np.sum(null_c_primes >= observed) + 1)
-                    / (n_permutations + 1)
-                )
+                # Batch Geary's C for all permutations in this chunk
+                null_c_primes = geary_c_batch(
+                    rand_scores, W_indices, W_indptr, W_data, self.n_cells)
+
+                for i, p_idx in enumerate(pw_idxs):
+                    observed = self.consistency[p_idx]
+                    exceed_counts[i] += np.sum(null_c_primes >= observed)
+
+            # Final empirical p-values for pathways of this size
+            for i, p_idx in enumerate(pw_idxs):
+                pvalues[p_idx] = (exceed_counts[i] + 1) / (n_permutations + 1)
 
         return pvalues
 
@@ -428,6 +451,9 @@ class SingleCellPAGE:
                 )
             unique_labels = np.unique(labels)
         else:
+            if n_pools is None or int(n_pools) <= 0:
+                raise ValueError(f"n_pools must be > 0, got {n_pools!r}")
+            n_pools = int(n_pools)
             # Simple random partitioning
             indices = np.random.permutation(self.n_cells)
             pool_size = max(1, self.n_cells // n_pools)
@@ -577,6 +603,35 @@ class SingleCellPAGE:
             f"  n_shared_genes={len(self.shared_genes)},\n"
             f"  n_pathways={self.n_pathways},\n"
             f"  n_neighbors={self.n_neighbors},\n"
+            f"  bin_axis='{self.bin_axis}',\n"
             f"  function='{self.function}'\n"
             f")"
+        )
+
+    @staticmethod
+    def _discretize_1d(inp_array, bins, noise_std=1e-9):
+        """Discretize one vector into equal-frequency bins."""
+        length = len(inp_array)
+        to_discr = inp_array + np.random.normal(0, noise_std, length)
+        bins_for_discr = np.interp(
+            np.linspace(0, length, bins + 1),
+            np.arange(length),
+            np.sort(to_discr),
+        )
+        bins_for_discr[-1] += 1
+        return np.digitize(to_discr, bins_for_discr) - 1
+
+    def _discretize_expression(self, expr_subset):
+        """Discretize expression by cell or by gene.
+
+        Returns
+        -------
+        np.ndarray
+            Integer array of shape (n_cells, n_genes).
+        """
+        axis = 1 if self.bin_axis == 'cell' else 0
+        return np.apply_along_axis(
+            lambda x: self._discretize_1d(x, self.n_bins),
+            axis,
+            expr_subset,
         )

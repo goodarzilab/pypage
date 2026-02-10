@@ -128,6 +128,22 @@ class TestSingleCellPAGEInit:
                 function='bad'
             )
 
+    def test_init_bad_bin_axis(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        with pytest.raises(ValueError, match="bin_axis must be"):
+            SingleCellPAGE(
+                expression=expression, genes=genes, genesets=gs,
+                bin_axis='bad',
+            )
+
+    def test_init_bad_permutation_chunk_size(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        with pytest.raises(ValueError, match="permutation_chunk_size must be"):
+            SingleCellPAGE(
+                expression=expression, genes=genes, genesets=gs,
+                permutation_chunk_size=0,
+            )
+
     def test_init_1d_expression_raises(self, synthetic_data):
         _, genes, gs, _ = synthetic_data
         with pytest.raises(ValueError, match="2D"):
@@ -141,6 +157,7 @@ class TestSingleCellPAGEInit:
         r = repr(sc)
         assert "SingleCellPAGE" in r
         assert "n_cells=200" in r
+        assert "bin_axis='cell'" in r
 
 
 class TestSingleCellPAGERun:
@@ -205,6 +222,29 @@ class TestSingleCellPAGERun:
         sc.run(n_permutations=10)
         assert sc.scores.shape == (50, sc.n_pathways)
 
+    def test_bin_axis_changes_discretization(self):
+        """cell and gene binning should produce different discretizations."""
+        expression, genes, gs, _ = _make_synthetic_data(
+            n_cells=50, n_genes=100, n_planted=2, n_null=2, pathway_size=10
+        )
+        sc_cell = SingleCellPAGE(
+            expression=expression, genes=genes, genesets=gs,
+            n_bins=3, function='mi', bin_axis='cell',
+        )
+        sc_gene = SingleCellPAGE(
+            expression=expression, genes=genes, genesets=gs,
+            n_bins=3, function='mi', bin_axis='gene',
+        )
+        expr_subset = expression[:, sc_cell._expr_idxs]
+
+        np.random.seed(7)
+        bins_cell = sc_cell._discretize_expression(expr_subset)
+        np.random.seed(7)
+        bins_gene = sc_gene._discretize_expression(expr_subset)
+
+        assert bins_cell.shape == bins_gene.shape
+        assert not np.array_equal(bins_cell, bins_gene)
+
     def test_numpy_anndata_consistency(self):
         """AnnData and numpy inputs should produce identical results."""
         anndata = pytest.importorskip("anndata")
@@ -231,6 +271,31 @@ class TestSingleCellPAGERun:
         # Consistency values should match
         np.testing.assert_allclose(
             sc_np.consistency, sc_ad.consistency, rtol=1e-10
+        )
+
+    def test_permutation_chunking_matches_unchunked(self):
+        """Chunked permutation testing should match unchunked with fixed seed."""
+        expression, genes, gs, _ = _make_synthetic_data(
+            n_cells=50, n_genes=100, n_planted=2, n_null=2, pathway_size=10,
+            seed=321,
+        )
+        np.random.seed(13)
+        sc_full = SingleCellPAGE(
+            expression=expression, genes=genes, genesets=gs,
+            n_bins=3, function='mi', permutation_chunk_size=100,
+        )
+        res_full = sc_full.run(n_permutations=20)
+
+        np.random.seed(13)
+        sc_chunked = SingleCellPAGE(
+            expression=expression, genes=genes, genesets=gs,
+            n_bins=3, function='mi', permutation_chunk_size=5,
+        )
+        res_chunked = sc_chunked.run(n_permutations=20)
+
+        pd.testing.assert_frame_equal(
+            res_full.sort_values('pathway').reset_index(drop=True),
+            res_chunked.sort_values('pathway').reset_index(drop=True),
         )
 
 
@@ -260,6 +325,17 @@ class TestRunNeighborhoods:
         )
         summary, group_results = sc.run_neighborhoods(n_pools=4)
         assert len(summary) == 4
+
+    def test_run_neighborhoods_with_invalid_npools_raises(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        sc = SingleCellPAGE(
+            expression=expression, genes=genes, genesets=gs,
+            n_bins=5, function='mi',
+        )
+        with pytest.raises(ValueError, match="n_pools must be > 0"):
+            sc.run_neighborhoods(n_pools=0)
+        with pytest.raises(ValueError, match="n_pools must be > 0"):
+            sc.run_neighborhoods(n_pools=-3)
 
     def test_run_neighborhoods_no_args_raises(self, synthetic_data):
         expression, genes, gs, _ = synthetic_data

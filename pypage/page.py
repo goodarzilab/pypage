@@ -340,14 +340,14 @@ class PAGE:
         """
         existing = []
         self._killed_log = []
-        inf_idx = np.flatnonzero(self.informative)
+        informative_mask = self.informative.astype(bool)
 
         # iterate through cmi in descending order
         pbar = tqdm(np.argsort(self.information)[::-1], desc="consolidating redundant pathways")
         for idx in pbar:
 
             # skip indices that are not informative
-            if idx not in inf_idx:
+            if not informative_mask[idx]:
                 continue
 
             # if there are no existing pathways yet start the chain
@@ -368,7 +368,7 @@ class PAGE:
                     self.y_bins,
                     self.y_bins)
 
-            if all(all_ri > self.redundancy_ratio):
+            if np.all(all_ri > self.redundancy_ratio):
                 existing.append(idx)
             else:
                 # Track which accepted pathway caused the rejection

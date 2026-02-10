@@ -260,6 +260,9 @@ pypage-sc --adata CRC.h5ad --gene-column gene \
     --gmt h.all.v2026.1.Hs.symbols.gmt --seed 42 --n-jobs 4
 ```
 
+Use `--bin-axis cell` (default) for VISION-like per-cell discretization across genes.
+`--bin-axis gene` is available for per-gene discretization across cells.
+
 This creates the output directory `CRC_scPAGE/` with:
 
 ```
@@ -382,7 +385,13 @@ from pypage import GeneSets, SingleCellPAGE
 adata = anndata.read_h5ad("my_data.h5ad")
 gs = GeneSets(ann_file="annotations.txt.gz")
 
-sc = SingleCellPAGE(adata=adata, genesets=gs, function='cmi', n_jobs=4)
+sc = SingleCellPAGE(
+    adata=adata,
+    genesets=gs,
+    function='cmi',
+    bin_axis='cell',  # VISION-like default
+    n_jobs=4,
+)
 results = sc.run(n_permutations=1000)
 
 print(results.head())
@@ -438,7 +447,9 @@ summary, group_results = sc.run_neighborhoods(labels=adata.obs['leiden'])
 |-----------|---------|-------------|
 | `function` | `'cmi'` | `'cmi'` or `'mi'` |
 | `n_bins` | `10` | Number of bins for expression discretization |
+| `bin_axis` | `'cell'` | `'cell'` (per-cell across genes, VISION-like) or `'gene'` (per-gene across cells) |
 | `n_neighbors` | `ceil(sqrt(n_cells))` | KNN neighbors (capped at 100) |
+| `permutation_chunk_size` | auto | Permutations processed per chunk (lower uses less memory) |
 | `connectivity` | `None` | Precomputed cell-cell connectivity matrix |
 | `n_jobs` | `1` | Number of parallel threads (0 or None for all available) |
 
