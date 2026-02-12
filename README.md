@@ -181,23 +181,24 @@ exp.convert_from_to("refseq", "ensg", "human")
 ## Command Line
 
 After installation, `pypage` is available as a command-line tool. All outputs are saved to an auto-created output directory (default: `{expression_stem}_PAGE/`).
+Use `--type discrete` for pre-binned inputs and `--type continuous` for score inputs that must be quantized (`--is-bin` remains as a legacy alias for discrete mode).
 
 ```bash
 # Basic usage — outputs go to expression_PAGE/ directory
-pypage -e expression.tab.gz --genesets-long annotations.txt.gz --is-bin
+pypage -e expression.tab.gz --genesets-long annotations.txt.gz --type discrete
 
 # With GMT file
-pypage -e scores.tab --gmt pathways.gmt --n-bins 10
+pypage -e scores.tab --gmt pathways.gmt --type continuous --n-bins 10
 
 # Explicit output directory
 pypage -e expr.tab.gz --gmt pathways.gmt --outdir my_results/
 
 # Manual pathway mode (bypass significance testing)
-pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --type discrete \
     --manual "apoptotic process,cell cycle"
 
 # With index-format gene sets
-pypage -e expr.tab.gz -g index_annotations.txt.gz --is-bin
+pypage -e expr.tab.gz -g index_annotations.txt.gz --type discrete
 
 # Reproducible run with seed
 pypage -e expr.tab.gz --gmt pathways.gmt --seed 42
