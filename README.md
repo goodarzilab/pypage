@@ -89,7 +89,7 @@ This example runs pyPAGE on DESeq2 differential expression results (log2 fold-ch
 ```bash
 pypage -e example_data/test_DESeq_logFC.txt.gz \
     --gmt example_data/h.all.v2026.1.Hs.symbols.gmt \
-    --cols GENE,log2FoldChange --seed 42
+    --type continuous --cols GENE,log2FoldChange --seed 42
 ```
 
 This creates `example_data/test_DESeq_logFC_PAGE/` with results, heatmap, and enrichment matrix.
@@ -98,6 +98,7 @@ This creates `example_data/test_DESeq_logFC_PAGE/` with results, heatmap, and en
 
 ```bash
 pypage --draw-only -e example_data/test_DESeq_logFC.txt.gz \
+    --type continuous \
     --min-val -2 --max-val 3 --bar-min -1 --bar-max 1
 ```
 
@@ -181,7 +182,7 @@ exp.convert_from_to("refseq", "ensg", "human")
 ## Command Line
 
 After installation, `pypage` is available as a command-line tool. All outputs are saved to an auto-created output directory (default: `{expression_stem}_PAGE/`).
-Use `--type discrete` for pre-binned inputs and `--type continuous` for score inputs that must be quantized (`--is-bin` remains as a legacy alias for discrete mode).
+`--type` should always be set explicitly: use `--type discrete` for pre-binned inputs and `--type continuous` for score inputs that must be quantized (`--is-bin` remains as a legacy alias for discrete mode).
 
 ```bash
 # Basic usage — outputs go to expression_PAGE/ directory
@@ -191,7 +192,7 @@ pypage -e expression.tab.gz --genesets-long annotations.txt.gz --type discrete
 pypage -e scores.tab --gmt pathways.gmt --type continuous --n-bins 10
 
 # Explicit output directory
-pypage -e expr.tab.gz --gmt pathways.gmt --outdir my_results/
+pypage -e expr.tab.gz --gmt pathways.gmt --type continuous --outdir my_results/
 
 # Manual pathway mode (bypass significance testing)
 pypage -e expr.tab.gz --genesets-long ann.txt.gz --type discrete \
@@ -201,7 +202,7 @@ pypage -e expr.tab.gz --genesets-long ann.txt.gz --type discrete \
 pypage -e expr.tab.gz -g index_annotations.txt.gz --type discrete
 
 # Reproducible run with seed
-pypage -e expr.tab.gz --gmt pathways.gmt --seed 42
+pypage -e expr.tab.gz --gmt pathways.gmt --type continuous --seed 42
 ```
 
 ### Output Files
@@ -217,16 +218,16 @@ The output directory contains:
 
 ```bash
 # Custom color scale (asymmetric min/max)
-pypage -e expr.tab --gmt pathways.gmt --min-val -2 --max-val 5
+pypage -e expr.tab --gmt pathways.gmt --type continuous --min-val -2 --max-val 5
 
 # Custom bin-edge bar normalization
-pypage -e expr.tab --gmt pathways.gmt --bar-min -1 --bar-max 1
+pypage -e expr.tab --gmt pathways.gmt --type continuous --bar-min -1 --bar-max 1
 
 # Different colormap
-pypage -e expr.tab --gmt pathways.gmt --cmap RdBu_r
+pypage -e expr.tab --gmt pathways.gmt --type continuous --cmap RdBu_r
 
 # Re-plot from saved matrix (no re-analysis)
-pypage --draw-only -e expr.tab --min-val -2 --max-val 3 --bar-min -1 --bar-max 1
+pypage --draw-only -e expr.tab --type continuous --min-val -2 --max-val 3 --bar-min -1 --bar-max 1
 ```
 
 Run `pypage --help` for a full list of options.
