@@ -36,6 +36,7 @@ def test_run(load_expression, load_ontology):
         n_shuffle=100,
         k=10,
         alpha=0.01,
+        filter_redundant=False,
         n_jobs=1)
     results, hm = p.run()
 

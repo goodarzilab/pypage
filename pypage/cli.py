@@ -73,6 +73,15 @@ def _load_expression(path, cols=None, no_header=False, is_bin=False, n_bins=10):
     return ExpressionProfile(df[gene_col], df[score_col], is_bin=is_bin, n_bins=n_bins)
 
 
+def _resolve_expression_input_mode(args, parser):
+    """Resolve expression mode from --type and legacy --is-bin."""
+    if args.type is None:
+        return "discrete" if args.is_bin else "continuous"
+    if args.type == "continuous" and args.is_bin:
+        parser.error("--is-bin conflicts with --type continuous. Use --type discrete.")
+    return args.type
+
+
 def _stem(path):
     """Strip directory and common extensions to get a clean stem for naming."""
     stem = os.path.splitext(path)[0]
@@ -138,8 +147,14 @@ def _build_parser():
         help="Expression file has no header row (columns selected by position)",
     )
     parser.add_argument(
+        "--type", choices=["continuous", "discrete"], default=None,
+        help="Expression input type. 'continuous' quantizes values; "
+             "'discrete' uses pre-binned labels as-is "
+             "(default: continuous, or discrete when --is-bin is set)",
+    )
+    parser.add_argument(
         "--is-bin", action="store_true", default=False,
-        help="Treat expression values as pre-binned integer labels",
+        help="Legacy alias for --type discrete",
     )
     parser.add_argument(
         "--n-bins", type=int, default=10,
@@ -322,9 +337,10 @@ def main(argv=None):
     _setup_outdir(args, args.expression)
 
     # -- Load expression ------------------------------------------------------
+    expression_mode = _resolve_expression_input_mode(args, parser)
     exp = _load_expression(
         args.expression, args.cols, args.no_header,
-        is_bin=args.is_bin, n_bins=args.n_bins,
+        is_bin=(expression_mode == "discrete"), n_bins=args.n_bins,
     )
 
     # -- Load gene sets -------------------------------------------------------

@@ -447,7 +447,8 @@ pypage --expression FILE --gmt FILE [options]
 | `-g`, `--genesets` | Gene set index file (pathway\tgene1\tgene2..., supports .gz) | mutually exclusive |
 | `--genesets-long` | Gene set long-format file (gene\tpathway per line, supports .gz) | mutually exclusive |
 | `--gmt` | Gene set GMT file (.gmt or .gmt.gz) | mutually exclusive |
-| `--is-bin` | Treat expression values as pre-binned labels | `False` |
+| `--type` | Expression input type: `continuous` (quantize) or `discrete` (pre-binned) | `continuous` |
+| `--is-bin` | Legacy alias for `--type discrete` | `False` |
 | `--n-bins` | Number of bins for continuous expression | `10` |
 | `--function` | `mi` or `cmi` | `cmi` |
 | `--n-shuffle` | Number of permutations | `10000` |
@@ -466,17 +467,17 @@ pypage --expression FILE --gmt FILE [options]
 
 ```bash
 # Basic run with long-format gene sets
-pypage -e expression.tab.gz --genesets-long annotations.txt.gz --is-bin
+pypage -e expression.tab.gz --genesets-long annotations.txt.gz --type discrete
 
 # With GMT file and custom parameters
 pypage -e scores.tab --gmt pathways.gmt --n-shuffle 5000 --alpha 0.01
 
 # Save results, heatmap, and redundancy log
-pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --type discrete \
     -o results.tsv --heatmap heatmap.png --killed killed.tsv
 
 # Manual pathway analysis
-pypage -e expr.tab.gz --genesets-long ann.txt.gz --is-bin \
+pypage -e expr.tab.gz --genesets-long ann.txt.gz --type discrete \
     --manual "apoptotic process,cell cycle"
 
 # Reproducible run

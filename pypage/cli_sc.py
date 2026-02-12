@@ -73,12 +73,20 @@ def _build_parser():
         help="Number of bins for expression discretization (default: 10)",
     )
     parser.add_argument(
+        "--bin-axis", choices=["cell", "gene"], default="cell",
+        help="Discretize expression per cell (VISION-like) or per gene (default: cell)",
+    )
+    parser.add_argument(
         "--n-neighbors", type=int, default=None,
         help="Number of KNN neighbors (default: ceil(sqrt(n_cells)), capped at 100)",
     )
     parser.add_argument(
         "--n-permutations", type=int, default=1000,
         help="Number of permutations for significance testing (default: 1000)",
+    )
+    parser.add_argument(
+        "--perm-chunk-size", type=int, default=None,
+        help="Chunk size for permutation null generation (default: auto, memory-aware)",
     )
     parser.add_argument(
         "--n-jobs", type=int, default=1,
@@ -521,6 +529,8 @@ def main(argv=None):
         n_neighbors=args.n_neighbors,
         n_bins=args.n_bins,
         function=args.function,
+        bin_axis=args.bin_axis,
+        permutation_chunk_size=args.perm_chunk_size,
         n_jobs=args.n_jobs,
     )
 
