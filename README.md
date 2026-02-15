@@ -2,6 +2,8 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/bio-pypage.svg)](https://pypi.org/project/bio-pypage/)
 [![Python versions](https://img.shields.io/pypi/pyversions/bio-pypage.svg)](https://pypi.org/project/bio-pypage/)
+[![Tests](https://github.com/goodarzilab/pyPAGE/actions/workflows/run_tests.yml/badge.svg)](https://github.com/goodarzilab/pyPAGE/actions/workflows/run_tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Examples
 
@@ -52,9 +54,6 @@ Single-cell (`example_data/CRC_scPAGE/`):
 - [Example UMAP pathway PDF](example_data/CRC_scPAGE/plots/umap_plots/REACTOME_M_PHASE.pdf)
 - [Example group-enrichment PDF](example_data/CRC_scPAGE/plots/group_enrichment/sc_group_enrichment_REACTOME_M_PHASE.pdf)
 - [Group-enrichment stats TSV](example_data/CRC_scPAGE/plots/group_enrichment/sc_group_enrichment_stats.tsv)
-[![Tests](https://github.com/goodarzilab/pyPAGE/actions/workflows/run_tests.yml/badge.svg)](https://github.com/goodarzilab/pyPAGE/actions/workflows/run_tests.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
 `pyPAGE` is a Python implementation of the conditional-information PAGE framework for gene-set enrichment analysis.
 
 It is designed to infer differential activity of pathways and regulons while accounting for annotation and membership biases using information-theoretic methods.
