@@ -1,485 +1,409 @@
-# pyPAGE
+# pyPAGE Manual
 
+This manual is the detailed reference for `pyPAGE`.
 
-## pypage.GeneSets
+## Scope
 
-```python3
-class pypage.GeneSets(genes: Optional[np.ndarray] = None,
-               pathways: Optional[np.ndarray] = None,
-               ann_file: Optional[str] = None,
-               n_bins: Optional[int] = 3,
-               first_col_is_genes: Optional[bool] = False)
+`pyPAGE` has two analysis modes:
+- Bulk PAGE (`PAGE`): pathway enrichment from one ranked or pre-binned gene profile.
+- Single-cell PAGE (`SingleCellPAGE`): per-cell pathway scoring + spatial consistency testing on a cell graph.
+
+Core public imports:
+
+```python
+from pypage import PAGE, SingleCellPAGE, ExpressionProfile, GeneSets, GeneMapper
 ```
 
-Objects of this class store information about gene-sets and should be passed to PAGE object as an input.
-To initialize GeneSets user should provide either tab delimited annotation file in index format 
-(each line starts with a gene-set name, followed by genes) 
-or a binary matrix encoding gene membership.
-
-```
-    ann_file: str
-        tab delimited annotation file in index format
-    first_col_is_genes:
-        specifies whether first element in each line of the annotation file is a gene
-    genes: np.ndarray
-        gene names in pathways matrix, alternative to ann_file
-    pathways: np.ndarray
-        binary matrix encoding gene-set membership, alternative to ann_file
-    n_bins: int
-        number of bins to use when binning membership array
-```
-
-#### GeneSets.from_gmt
-
-```python3
-@classmethod
-GeneSets.from_gmt(gmt_file: str,
-                  n_bins: int = 3,
-                  min_size: Optional[int] = None,
-                  max_size: Optional[int] = None) -> GeneSets
-```
-
-Load gene sets from a GMT file (e.g., MSigDB). Supports plain `.gmt` and gzipped `.gmt.gz` files.
-
-```
-    gmt_file: str
-        Path to .gmt or .gmt.gz file.
-    n_bins: int
-        Number of bins for membership binning (default: 3).
-    min_size: int, optional
-        Minimum pathway size. Pathways with fewer genes are removed after loading.
-    max_size: int, optional
-        Maximum pathway size. Pathways with more genes are removed after loading.
-```
-
-After loading, pathway descriptions from the GMT file are available via the `descriptions` attribute (dict mapping pathway name to description string).
-
-#### GeneSets.to_gmt
-
-```python3
-GeneSets.to_gmt(output_file: str,
-                descriptions: Optional[dict] = None)
-```
-
-Export gene sets to GMT format.
-
-```
-    output_file: str
-        Path to output .gmt or .gmt.gz file.
-    descriptions: dict, optional
-        Mapping of pathway name to description string.
-        Falls back to self.descriptions if available, otherwise 'na'.
-```
-
-#### GeneSets.map_genes
-
-```python3
-GeneSets.map_genes(mapper: GeneMapper,
-                   from_type: str = 'ensg',
-                   to_type: str = 'symbol')
-```
-
-Convert gene IDs in-place using a GeneMapper instance. Genes that cannot be mapped are dropped. Updates `self.genes`, `self.bool_array`, and `self.membership` in place. Pathways that become empty after dropping genes are also removed.
-
-```
-    mapper: GeneMapper
-        A GeneMapper instance with a cached mapping table.
-    from_type: str
-        Source ID type: 'ensg', 'symbol', or 'entrez'.
-    to_type: str
-        Target ID type: 'ensg', 'symbol', or 'entrez'.
-```
-
-#### GeneSets.convert_from_to
-
-```python3
-GeneSets.convert_from_to(input_format: str,
-                         output_format: str,
-                         species: Optional[str] = 'human')
-```
-
-This function is used to convert gene names in the annotation to another format.
-
-Available formats: ensg (ensemble gene ids), enst (ensemble transcript ids), refseq, entrez (gene ids), gs (gene symbol).
-
-```
-    input_format: str
-        input format of the annotation
-    output_format: str
-        output format of the annotation
-    species: str
-        species, available: human, mouse
-```
-
-## pypage.ExpressionProfile
-
-```python3
-class pypage.ExpressionProfile(genes: np.ndarray,
-                        expression: np.ndarray,
-                        is_bin: bool = False,
-                        n_bins: Optional[int] = 10)
-```
-
-Objects of this class store information about gene expression and should be passed to PAGE object as an input.
-
-```
-    genes: np.ndarray
-        The array with gene names.
-    expression: np.ndarray
-        The array representing either the continuous expression value
-        of genes, or the bin/cluster that gene belongs to.
-    is_bin: bool
-        Specifies that the provided array is already prebinned.
-    n_bins: int
-        number of bins to bin the expression array into.
-```
-
-#### ExpressionProfile.convert_from_to
-
-```python3
-ExpressionProfile.convert_from_to(input_format: str,
-                         output_format: str,
-                         species: Optional[str] = 'human')
-```
-
-This function is used to convert gene names in the expression profile to another format.
-
-Available formats: ensg (ensemble gene ids), enst (ensemble transcript ids), refseq, entrez (gene ids), gs (gene symbol).
-
-```
-    input_format: str
-        input format of the annotation
-    output_format: str
-        output format of the annotation
-    species: str
-        species, available: human, mouse
-```
-
-## pypage.PAGE
-
-```python3
-class pypage.PAGE(
-            expression: ExpressionProfile,
-            genesets: GeneSets,
-            n_shuffle: int = 1e4,
-            alpha: float = 5e-3,
-            k: int = 20,
-            filter_redundant: bool = True,
-            n_jobs: Optional[int] = 1,
-            function: Optional[str] = 'cmi',
-            redundancy_ratio: Optional[float] = 5.0)
-```
-The main object of the package that performs the computation of differentially active genes and stores the results.
-
-```
-        expression: ExpressionProfile
-            ExpressionProfile object containing differential gene expression.
-
-        genesets: GeneSets
-            GeneSets object containing gene annotations.
-
-        n_shuffle: int
-            The number of permutations in the statistical test (default: 10000).
-
-        alpha: float
-            The maximum p-value threshold to consider a pathway informative
-            with respect to the permuted mutual information distribution (default: 0.005).
-
-        k: int
-            The number of contiguous uninformative pathways to consider before
-            stopping the informative pathway search (default: 20).
-
-        filter_redundant: bool
-            Specify whether to perform the pathway redundancy search (default: True).
-
-        n_jobs: int
-            The number of parallel jobs to use in the analysis
-            (`default = 1`)
-
-        function: str
-            Specify whether conditional mutual information ('cmi') or mutual information ('mi')
-            should be calculated (default: 'cmi').
-
-        redundancy_ratio: float
-            CMI/MI ratio threshold for redundancy filtering. Pathways where all pairwise
-            ratios against accepted pathways are above this value are kept (default: 5.0).
-```
-
-#### PAGE.run
-```python3
-PAGE.run()
-```
-The function to run computation of differentially active genes.
-As a result it produces a pandas dataframe and a Heatmap object which can also be accessed as PAGE.results and PAGE.hm attributes.
-
-#### PAGE.run_manual
-```python3
-PAGE.run_manual(pathway_names: list) -> Tuple[pd.DataFrame, Optional[Heatmap]]
-```
-
-Compute enrichment statistics and heatmap for a user-specified list of pathways, bypassing significance and redundancy tests. All names must exist in the gene set annotations.
-
-```
-    pathway_names: list
-        List of pathway names to include in the analysis.
-
-    Returns:
-        Tuple of (results DataFrame, Heatmap object).
-        The results DataFrame contains pathway, CMI, p-value (NaN), and Regulation pattern.
-```
-
-#### PAGE.get_enriched_genes
-```python3
-PAGE.get_enriched_genes(pathway: str)
-```
-
-The function that returns the information about which gene-set genes are present in which expression bin.
-
-```
-    name: str
-        The name of the gene-set.
-```
-
-#### PAGE.get_redundancy_log
-```python3
-PAGE.get_redundancy_log() -> pd.DataFrame
-```
-
-Return a DataFrame of pathways rejected during redundancy filtering. Only populated after `run()` with `filter_redundant=True`.
-
-```
-    Returns:
-        pd.DataFrame with columns:
-            rejected_pathway: str — name of the rejected pathway
-            killed_by: str — name of the accepted pathway that caused the rejection
-            min_ratio: float — the lowest CMI/MI ratio that triggered removal
-```
-
-#### PAGE.get_es_matrix
-```python3
-PAGE.get_es_matrix() -> pd.DataFrame
-```
-
-Returns the enrichment score matrix for each pathway and bin. Enrichment scores are defined as log10 hypergeometric p-values (overrepresented scores per bin are positive, underrepresented scores are negative). Only available after `run()` or `run_manual()`.
-
-```
-    Returns:
-        pd.DataFrame — rows are pathways, columns are bins.
-```
-
-#### PAGE.full_results
-
-After `run()`, `PAGE.full_results` is a DataFrame containing **all** informative pathways (before redundancy filtering) with a boolean `redundant` column. Columns: `pathway`, `CMI`, `p-value`, `redundant`.
-
-## pypage.Heatmap
-
-Heatmap objects are used to produce graphical representations of pyPAGE results.
-
-Objects of this class are automatically generated by PAGE, so we will not concentrate on its input parameters here.
-
-#### Heatmap.show
-
-```python3
-Heatmap.show(max_rows: Optional[int] = 50,
-             show_reg: Optional[bool] = False,
-             max_val: Optional[int] = 5,
-             title: str = '')
-```
-
-Show the heatmap representation pyPAGE results.
-
-``` 
-    max_rows: int
-        Maximal number of rows in the ouput
-    show_reg: bool
-        Specifies whether expression of a regulator should be used (works only if gene-sets are named by their regulators).
-    max_val: int
-        Max value for a colorbar.
-    title: str
-        Title of the heatmap
-```
-
-#### Heatmap.save
-
-```python3
-Heatmap.save(output_name:str,
-             max_rows: Optional[int] = 50,
-             show_reg: Optional[bool] = False,
-             max_val: Optional[int] = 5,
-             title: str = '')
-```
-
-Save the heatmap representation pyPAGE results.
-
-``` 
-    output_name: str
-        The name of the output file.
-    max_rows: int
-        Maximal number of rows in the ouput
-    show_reg: bool
-        Specifies whether expression of a regulator should be used (works only if gene-sets are named by their regulators).
-    max_val: int
-        Max value for a colorbar.
-    title: str
-        Title of the heatmap
-```
-
-#### Heatmap.convert_from_to
-
-```python3
-Heatmap.convert_from_to(input_format: str,
-                        output_format: str,
-                        species: Optional[str] = 'human')
-```
-
-This function is used to convert regulator gene names to another format (the one that is used in the differential expression profile).
-
-Available formats: ensg (ensemble gene ids), enst (ensemble transcript ids), refseq, entrez (gene ids), gs (gene symbol).
-
-```
-    input_format: str
-        input format of the annotation
-    output_format: str
-        output format of the annotation
-    species: str
-        species, available: human, mouse
-```
-
-#### Heatmap.add_gene_expression
-```python3
-Heatmap.add_gene_expression(genes: np.ndarray,
-                            expression: np.ndarray)
-```
-This function should be used if you want to visualize the expression of the regulators in cases when it is not contained in PAGE object. 
-For example, when PAGE is run to identify RBP regulons using differential stability and you want to add RBP expression to the heatmap output.
-
-```
-genes: np.ndarray
-    Array of gene names
-expression: np.ndarray
-    Array of differential expression values.
-```
-
-## pypage.GeneMapper
-
-```python3
-class pypage.GeneMapper(species: str = 'human',
-                         cache_dir: Optional[str] = None)
-```
-
-Offline gene ID conversion using a locally cached mapping table. On first instantiation, downloads a mapping table from Ensembl BioMart (~5 MB) and caches it locally. Subsequent instantiations load from cache with no network required.
-
-Supported ID types: `'ensg'` (Ensembl gene IDs), `'symbol'` (gene symbols), `'entrez'` (Entrez gene IDs).
-
-```
-    species: str
-        Species to use: 'human' or 'mouse'.
-    cache_dir: str, optional
-        Directory for the cache file. Defaults to ~/.pypage/.
-```
-
-#### GeneMapper.convert
-
-```python3
-GeneMapper.convert(ids: array-like,
-                   from_type: str = 'ensg',
-                   to_type: str = 'symbol') -> (np.ndarray, dict)
-```
-
-Convert gene IDs using the cached mapping table.
-
-```
-    ids: array-like
-        Gene IDs to convert.
-    from_type: str
-        Source ID type: 'ensg', 'symbol', or 'entrez'.
-    to_type: str
-        Target ID type: 'ensg', 'symbol', or 'entrez'.
-
-    Returns:
-        np.ndarray: Converted IDs. Unmapped entries are set to None.
-        dict: Mapping of input IDs that failed to convert (input_id -> None).
-```
-
-Versioned Ensembl IDs (e.g., `ENSG00000141510.15`) are automatically stripped of the version suffix when `from_type='ensg'`.
-
-#### GeneMapper.build
-
-```python3
-@staticmethod
-GeneMapper.build(species: str = 'human',
-                 cache_dir: Optional[str] = None)
-```
-
-Force (re)download the mapping table from Ensembl BioMart. Requires `pybiomart` and network access.
-
-```
-    species: str
-        Species to use: 'human' or 'mouse'.
-    cache_dir: str, optional
-        Directory for the cache file. Defaults to ~/.pypage/.
-```
-
-#### GeneMapper.cache_path
-
-```python3
-@property
-GeneMapper.cache_path -> str
-```
-
-Path to the cached mapping file (e.g., `~/.pypage/gene_map_human.tsv`).
-
-## Command Line Interface
-
-After installation (`pip install bio-pypage` or `pip install -e .`), the `pypage` command is available:
-
-```
-pypage --expression FILE --genesets FILE [options]
-pypage --expression FILE --genesets-long FILE [options]
-pypage --expression FILE --gmt FILE [options]
-```
-
-### Arguments
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-e`, `--expression` | Expression file (tab-delimited: gene, score/bin) | required |
-| `-g`, `--genesets` | Gene set index file (pathway\tgene1\tgene2..., supports .gz) | mutually exclusive |
-| `--genesets-long` | Gene set long-format file (gene\tpathway per line, supports .gz) | mutually exclusive |
-| `--gmt` | Gene set GMT file (.gmt or .gmt.gz) | mutually exclusive |
-| `--type` | Expression input type: `continuous` (quantize) or `discrete` (pre-binned) | `continuous` |
-| `--is-bin` | Legacy alias for `--type discrete` | `False` |
-| `--n-bins` | Number of bins for continuous expression | `10` |
-| `--function` | `mi` or `cmi` | `cmi` |
-| `--n-shuffle` | Number of permutations | `10000` |
-| `--alpha` | P-value threshold | `0.005` |
-| `-k` | Early-stopping consecutive failures | `20` |
-| `--filter-redundant` / `--no-filter-redundant` | Redundancy filtering | `True` |
-| `--redundancy-ratio` | CMI/MI threshold for redundancy | `5.0` |
-| `--n-jobs` | Parallel threads | `1` |
-| `-o`, `--output` | Output TSV path | stdout |
-| `--heatmap` | Save heatmap image to path (PNG/PDF) | — |
-| `--manual` | Comma-separated pathway names (bypass significance testing) | — |
-| `--killed` | Save redundancy log to path (TSV) | — |
-| `--seed` | Random seed for reproducibility | — |
-
-### Examples
+## Installation
 
 ```bash
-# Basic run with long-format gene sets
-pypage -e expression.tab.gz --genesets-long annotations.txt.gz --type discrete
-
-# With GMT file and custom parameters
-pypage -e scores.tab --gmt pathways.gmt --n-shuffle 5000 --alpha 0.01
-
-# Save results, heatmap, and redundancy log
-pypage -e expr.tab.gz --genesets-long ann.txt.gz --type discrete \
-    -o results.tsv --heatmap heatmap.png --killed killed.tsv
-
-# Manual pathway analysis
-pypage -e expr.tab.gz --genesets-long ann.txt.gz --type discrete \
-    --manual "apoptotic process,cell cycle"
-
-# Reproducible run
-pypage -e expr.tab.gz --gmt pathways.gmt --seed 42
+pip install bio-pypage
 ```
+
+From source:
+
+```bash
+git clone https://github.com/goodarzilab/pyPAGE
+cd pyPAGE
+pip install -e .
+```
+
+## Data Objects
+
+### ExpressionProfile
+
+Represents expression for bulk PAGE input.
+
+```python
+ExpressionProfile(genes, expression, is_bin=False, n_bins=10)
+```
+
+- `genes`: 1D array of gene names.
+- `expression`:
+  - 1D continuous scores (`is_bin=False`) or
+  - pre-binned/discrete labels (`is_bin=True`), or
+  - 2D matrix for advanced MI/CMI matrix use.
+- `is_bin=False`: equal-frequency discretization into `n_bins`.
+- `is_bin=True`: preserves discrete labels by encoding categories.
+- Missing values are dropped from input vectors.
+
+Useful attributes after construction/subsetting:
+- `genes`, `raw_expression`, `n_genes`, `n_bins`
+- `bin_edges` (continuous mode)
+- `bin_labels` (discrete mode or generated labels)
+
+Legacy ID conversion (network-dependent via BioMart):
+
+```python
+exp.convert_from_to("refseq", "ensg", "human")
+```
+
+### GeneSets
+
+Represents pathway membership.
+
+```python
+GeneSets(genes=..., pathways=..., ann_file=None, n_bins=3, first_col_is_genes=False)
+```
+
+Construction paths:
+- Long format arrays: `genes` + `pathways` (same length).
+- Index file: `ann_file` where each line is either:
+  - `pathway<TAB>gene1<TAB>gene2...` (default), or
+  - `gene<TAB>pathway1<TAB>pathway2...` with `first_col_is_genes=True`.
+
+GMT support:
+
+```python
+gs = GeneSets.from_gmt("pathways.gmt", min_size=15, max_size=500)
+gs.to_gmt("filtered_pathways.gmt")
+```
+
+Key attributes:
+- `genes`, `pathways`
+- `bool_array` (pathway x gene membership matrix)
+- `membership` (gene membership counts across pathways)
+
+### GeneMapper (recommended for ID conversion)
+
+Offline conversion with local cache (`~/.pypage/gene_map_<species>.tsv`).
+
+```python
+mapper = GeneMapper(species="human")
+converted, unmapped = mapper.convert(ids, from_type="ensg", to_type="symbol")
+```
+
+Supported ID types: `ensg`, `symbol`, `entrez`.
+
+Map full gene sets in-place:
+
+```python
+gs.map_genes(mapper, from_type="entrez", to_type="symbol")
+```
+
+`GeneMapper` downloads mapping on first run (via BioMart), then works from cache.
+
+## Bulk PAGE API
+
+### Minimal run
+
+```python
+import pandas as pd
+from pypage import PAGE, ExpressionProfile, GeneSets
+
+expr = pd.read_csv("example_data/test_DESeq_logFC.txt", sep="\t")
+exp = ExpressionProfile(expr["GENE"], expr["log2FoldChange"], is_bin=False, n_bins=9)
+gs = GeneSets.from_gmt("example_data/h.all.v2026.1.Hs.symbols.gmt")
+
+p = PAGE(
+    exp,
+    gs,
+    function="cmi",          # "cmi" or "mi"
+    n_shuffle=10000,
+    alpha=0.005,
+    k=20,
+    filter_redundant=True,
+    redundancy_ratio=5.0,
+    n_jobs=1,
+)
+
+results, heatmap = p.run()
+```
+
+Returned:
+- `results` DataFrame columns:
+  - `pathway`, `CMI`, `z-score`, `p-value`, `Regulation pattern`
+- `heatmap`: `Heatmap` object or `None` if no informative pathways.
+
+### Manual pathway mode
+
+Bypasses permutation significance and redundancy filtering.
+
+```python
+manual_results, manual_hm = p.run_manual([
+    "HALLMARK_MYC_TARGETS_V1",
+    "HALLMARK_E2F_TARGETS",
+])
+```
+
+In manual mode, `p-value` and `z-score` are `NaN`.
+
+### Redundancy and introspection
+
+```python
+killed = p.get_redundancy_log()
+full = p.full_results
+es_matrix = p.get_es_matrix()
+```
+
+- `get_redundancy_log()` columns: `rejected_pathway`, `killed_by`, `min_ratio`
+- `full_results` includes informative pathways before final redundancy exclusion with a `redundant` flag.
+- `get_es_matrix()` returns pathway x bin enrichment scores used for plotting.
+
+### Per-pathway enriched genes
+
+```python
+enriched_bins = p.get_enriched_genes("HALLMARK_MYC_TARGETS_V1")
+```
+
+Returns a list of gene arrays by expression bin.
+
+## Heatmap Object
+
+The bulk run heatmap object supports static, interactive, and matrix-based workflows.
+
+```python
+heatmap.save("heatmap.pdf", max_rows=50, max_val=5.0, min_val=-5.0)
+heatmap.to_html("heatmap.html", max_rows=50)
+heatmap.save_matrix("results.matrix.tsv")
+```
+
+Load later for draw-only rendering:
+
+```python
+from pypage.heatmap import Heatmap
+hm = Heatmap.from_matrix("results.matrix.tsv")
+hm.save("redrawn.pdf", max_rows=80)
+```
+
+Notes:
+- `max_rows=-1` shows all pathways.
+- `show_reg=True` shows regulator column when regulator expression is available.
+- `bar_min`/`bar_max` control normalization of the continuous-mode bin-edge bar.
+
+## Bulk CLI (`pypage`)
+
+### Full run
+
+```bash
+pypage -e expression.tsv --gmt pathways.gmt --type continuous
+```
+
+Required for full run:
+- `-e/--expression`
+- one of `-g/--genesets`, `--genesets-long`, or `--gmt`
+
+Common options:
+- `--type continuous|discrete` (`--is-bin` is a legacy alias for discrete)
+- `--cols GENE_COL,SCORE_COL` (names or 1-based indices)
+- `--no-header`
+- `--n-bins`
+- `--function mi|cmi`
+- `--n-shuffle`, `--alpha`, `-k`
+- `--filter-redundant` / `--no-filter-redundant`
+- `--redundancy-ratio`
+- `--manual` (comma-separated names or file)
+- visualization controls: `--max-rows`, `--min-val`, `--max-val`, `--bar-min`, `--bar-max`, `--cmap`, `--cmap-reg`, `--show-reg`, `--title`
+
+### Draw-only mode
+
+Re-render from matrix without recomputing enrichment:
+
+```bash
+pypage --draw-only --outdir my_run
+# or
+pypage --draw-only --matrix my_run/tables/results.matrix.tsv
+```
+
+### Resume mode
+
+```bash
+pypage --resume -e expression.tsv --gmt pathways.gmt --type continuous
+```
+
+`--resume` attempts matrix-based redraw first; if matrix is missing it falls back to full analysis.
+
+### Default output layout
+
+For default `outdir={expression_stem}_PAGE/`:
+- `tables/results.tsv`
+- `tables/results.matrix.tsv`
+- `tables/results.killed.tsv`
+- `plots/heatmap.pdf`
+- `heatmap.html`
+- `run/command.txt`
+- `run/status.json`
+
+## Single-Cell PAGE API
+
+### Construct from AnnData (recommended)
+
+```python
+import anndata
+from pypage import GeneSets, SingleCellPAGE
+
+adata = anndata.read_h5ad("example_data/CRC.h5ad")
+gs = GeneSets.from_gmt("example_data/c2.all.v2026.1.Hs.symbols.gmt")
+
+sc = SingleCellPAGE(
+    adata=adata,
+    genesets=gs,
+    function="cmi",          # "mi" or "cmi"
+    n_bins=10,
+    bin_axis="cell",         # "cell" or "gene"
+    n_neighbors=None,         # defaults to ceil(sqrt(n_cells)), capped at 100
+    fast_mode=False,
+    n_jobs=1,
+    filter_redundant=True,
+    redundancy_ratio=5.0,
+    redundancy_scope="fdr",  # "fdr" or "all"
+    redundancy_fdr=0.05,
+)
+
+results = sc.run(n_permutations=1000)
+```
+
+### Construct from arrays
+
+```python
+sc = SingleCellPAGE(
+    expression=X,       # shape (n_cells, n_genes)
+    genes=gene_names,
+    genesets=gs,
+    connectivity=W,     # optional sparse graph
+)
+```
+
+### Results and outputs
+
+`sc.run(...)` returns DataFrame columns:
+- `pathway`, `consistency`, `p-value`, `FDR`
+
+Related attributes:
+- `sc.scores`: per-cell pathway score matrix
+- `sc.full_results`: includes `redundant` flag
+- `sc.results`: filtered results (if redundancy filtering enabled)
+
+### Manual mode
+
+```python
+manual = sc.run_manual(["REACTOME_M_PHASE", "REACTOME_INTERFERON_ALPHA_BETA_SIGNALING"])
+```
+
+Manual mode returns `p-value=NaN`, `FDR=NaN`.
+
+### Redundancy and neighborhood analysis
+
+```python
+killed = sc.get_redundancy_log()
+summary, group_results = sc.run_neighborhoods(labels=adata.obs["leiden"])
+```
+
+`run_neighborhoods` runs standard bulk PAGE on group-level pseudo-bulk profiles.
+
+### Plot helpers
+
+```python
+sc.plot_consistency_ranking(top_n=30, fdr_threshold=0.05)
+sc.plot_pathway_on_embedding("REACTOME_M_PHASE", embedding_key="X_umap")
+sc.plot_pathway_heatmap(labels=adata.obs["leiden"])
+```
+
+## Single-Cell CLI (`pypage-sc`)
+
+### Full run
+
+```bash
+pypage-sc --adata data.h5ad --gmt pathways.gmt
+```
+
+Required for full run:
+- one of `--adata` or `--expression`
+- one of `-g/--genesets`, `--genesets-long`, or `--gmt`
+- `--genes` is required when using `--expression`
+
+Common analysis options:
+- `--function mi|cmi`
+- `--n-bins`
+- `--bin-axis cell|gene`
+- `--n-neighbors`
+- `--n-permutations`
+- `--perm-chunk-size`
+- `--score-chunk-size`
+- `--fast-mode`
+- `--filter-redundant` / `--no-filter-redundant`
+- `--redundancy-ratio`, `--redundancy-scope`, `--redundancy-fdr`
+- `--manual`
+
+Visualization/report options:
+- `--top-n`, `--fdr-threshold`, `--title`
+- `--umap-top-n`, `--embedding-key`, `--sc-cmap`
+- `--groupby`, `--group-enrichment-top-n`, `--no-group-enrichment`
+- `--report`, `--no-report`, `--report-vmin`, `--report-vmax`
+- `--ranking-pdf`, `--ranking-html`
+- `--scores`
+- `--no-save-adata`
+
+### Draw-only mode
+
+```bash
+pypage-sc --draw-only --outdir data_scPAGE
+```
+
+Draw-only regenerates ranking artifacts (and report/UMAP/group artifacts when an annotated `adata.h5ad` is available).
+
+### Resume mode
+
+```bash
+pypage-sc --adata data.h5ad --gmt pathways.gmt --resume
+```
+
+`--resume` can skip analysis and reuse prior outputs when input signatures and parameter signatures match a completed run manifest.
+
+### Default output layout
+
+For default `outdir={input_stem}_scPAGE/`:
+- `tables/results.tsv`
+- `tables/results.killed.tsv`
+- `plots/ranking.pdf`
+- `plots/ranking.html`
+- `plots/umap_plots/*.pdf`
+- `plots/group_enrichment/*.pdf`
+- `plots/group_enrichment/sc_group_enrichment_stats.tsv`
+- `sc_report.html`
+- `adata.h5ad` (unless disabled)
+- `run/command.txt`
+- `run/command.json`
+- `run/manifest.json`
+- `run/artifacts.json`
+
+## Reproducibility Guidance
+
+- Use `--seed` for CLI runs.
+- For Python API runs, set NumPy seed before constructing profiles:
+
+```python
+import numpy as np
+np.random.seed(42)
+```
+
+- Use `n_jobs=1` for stricter run-to-run reproducibility.
+- Keep gene IDs consistent between expression and gene-set inputs before running PAGE.
+
+## Notebook Guide
+
+Refreshed notebooks in `notebooks/`:
+- `pyPAGE_tutorial.ipynb`: end-to-end bulk + single-cell walkthrough.
+- `bulk_page_tutorial.ipynb`: focused bulk workflow.
+- `sc_page_tutorial.ipynb`: CRC AnnData + `pypage-sc` style outputs.
+- `single_cell_page_tutorial.ipynb`: synthetic single-cell walkthrough.
