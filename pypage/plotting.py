@@ -302,6 +302,7 @@ def interactive_report_to_html(
     title='pyPAGE-SC Interactive Report',
     pathway_genes=None,
     metadata=None,
+    groupby=None,
 ):
     """Generate a self-contained interactive HTML report (VISION-like).
 
@@ -329,6 +330,8 @@ def interactive_report_to_html(
         Mapping of pathway name to list of gene names.
     metadata : dict, optional
         Mapping of column name to list of values (one per cell, categorical).
+    groupby : str, optional
+        Preferred metadata column for group-enrichment bars.
     """
     pathway_names = list(pathway_names)
     n_cells = scores.shape[0]
@@ -379,6 +382,11 @@ def interactive_report_to_html(
                 'values': [cat_to_idx[v] for v in str_vals],
                 'categories': categories,
             }
+    groupby_preferred = None
+    if groupby and groupby in metadata_json:
+        groupby_preferred = groupby
+    elif metadata_json:
+        groupby_preferred = sorted(metadata_json.keys())[0]
 
     # Viridis LUT
     viridis_lut = _generate_viridis_lut(256)
@@ -388,6 +396,7 @@ def interactive_report_to_html(
         'embeddings': embeddings_json,
         'scores': scores_json,
         'metadata': metadata_json,
+        'groupby_preferred': groupby_preferred,
         'n_cells': n_cells,
         'fdr_threshold': fdr_threshold,
     }
@@ -492,6 +501,12 @@ canvas.scatter{{display:block}}
 .cat-legend{{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:11px}}
 .cat-legend-item{{display:flex;align-items:center;gap:3px}}
 .cat-swatch{{width:10px;height:10px;border-radius:2px;border:1px solid rgba(0,0,0,0.15)}}
+.group-panel{{margin-top:6px;border:1px solid #ddd;border-radius:4px;background:#fff;padding:8px;
+  flex-shrink:0}}
+.group-controls{{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}}
+.group-controls label{{font-size:12px;color:#555}}
+.group-select{{padding:4px 8px;border:1px solid #ccc;border-radius:4px;font-size:12px;background:#fff}}
+.group-canvas{{width:100%;height:210px;border:1px solid #ddd;border-radius:3px;background:#fff;display:block}}
 
 /* Tooltip */
 .tooltip{{position:fixed;background:rgba(30,30,30,0.92);color:#fff;padding:6px 10px;
@@ -541,6 +556,18 @@ canvas.scatter{{display:block}}
       </div>
     </div>
     <div class="legend-bar" id="legendBar"></div>
+    <div class="group-panel" id="groupPanel">
+      <div class="group-controls">
+        <label>Group by:</label>
+        <select class="group-select" id="groupBySelect"></select>
+        <label>Metric:</label>
+        <select class="group-select" id="groupMetric">
+          <option value="fraction">High-score fraction (>= P75)</option>
+          <option value="mean">Mean pathway score</option>
+        </select>
+      </div>
+      <canvas class="group-canvas" id="groupCanvas"></canvas>
+    </div>
   </div>
 </div>
 
@@ -588,6 +615,10 @@ var scatterArea=document.getElementById("scatterArea");
 var splitBtn=document.getElementById("splitBtn");
 var colorBySelect=document.getElementById("colorBy");
 var tooltip=document.getElementById("tooltip");
+var groupPanel=document.getElementById("groupPanel");
+var groupBySelect=document.getElementById("groupBySelect");
+var groupMetric=document.getElementById("groupMetric");
+var groupCanvas=document.getElementById("groupCanvas");
 
 // Populate color-by dropdown
 function fillColorSelect(sel,idx){{
@@ -816,9 +847,151 @@ function setupScatterPanels(){{
   if(splitMode&&colorBy.length<2)colorBy.push("_pw");
 }}
 setupScatterPanels();
+initGroupBars();
 
 // Color-by change for single mode
 colorBySelect.onchange=function(){{colorBy[0]=colorBySelect.value;drawAll();}};
+
+function initGroupBars(){{
+  if(!groupBySelect||!groupPanel) return;
+  groupBySelect.innerHTML="";
+  if(metaKeys.length===0){{
+    groupPanel.style.display="none";
+    return;
+  }}
+  metaKeys.forEach(function(k){{
+    var opt=document.createElement("option");
+    opt.value=k;
+    opt.textContent=k;
+    groupBySelect.appendChild(opt);
+  }});
+  var preferred=DATA.groupby_preferred;
+  if(preferred&&metaKeys.indexOf(preferred)!==-1){{
+    groupBySelect.value=preferred;
+  }}else{{
+    groupBySelect.value=metaKeys[0];
+  }}
+  groupBySelect.onchange=drawGroupBars;
+  groupMetric.onchange=drawGroupBars;
+}}
+
+function drawGroupBars(){{
+  if(!groupCanvas||!groupBySelect) return;
+  var ctx=groupCanvas.getContext("2d");
+  var rect=groupCanvas.getBoundingClientRect();
+  var w=Math.max(10,Math.floor(rect.width));
+  var h=Math.max(10,Math.floor(rect.height));
+  groupCanvas.width=Math.floor(w*dpr);
+  groupCanvas.height=Math.floor(h*dpr);
+  groupCanvas.style.width=w+"px";
+  groupCanvas.style.height=h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+
+  if(!curPw||!DATA.scores[curPw]){{
+    ctx.fillStyle="#888";
+    ctx.font="12px sans-serif";
+    ctx.fillText("Select a pathway to show group enrichment.",10,22);
+    return;
+  }}
+  var gb=groupBySelect.value;
+  var md=DATA.metadata[gb];
+  if(!md||!md.values||!md.categories){{
+    ctx.fillStyle="#888";
+    ctx.font="12px sans-serif";
+    ctx.fillText("No metadata available for grouped bars.",10,22);
+    return;
+  }}
+  var vals=DATA.scores[curPw];
+  var n=Math.min(vals.length, md.values.length);
+  if(n===0){{
+    ctx.fillStyle="#888";
+    ctx.font="12px sans-serif";
+    ctx.fillText("No cells available for grouped bars.",10,22);
+    return;
+  }}
+
+  var sortedVals=vals.slice(0,n).slice().sort(function(a,b){{return a-b;}});
+  var qIdx=Math.floor(0.75*Math.max(0,sortedVals.length-1));
+  var thr=sortedVals[qIdx];
+  var agg={{}};
+  for(var i=0;i<n;i++){{
+    var gid=md.values[i];
+    if(agg[gid]===undefined)agg[gid]={{n:0,pos:0,sum:0}};
+    var a=agg[gid];
+    var v=vals[i];
+    a.n+=1;
+    if(v>=thr)a.pos+=1;
+    a.sum+=v;
+  }}
+
+  var rows=[];
+  Object.keys(agg).forEach(function(k){{
+    var gid=parseInt(k,10);
+    var a=agg[k];
+    var label=(gid>=0&&gid<md.categories.length)?md.categories[gid]:String(gid);
+    rows.push({{
+      label:label,
+      n:a.n,
+      fraction:a.n>0?(a.pos/a.n):0,
+      mean:a.n>0?(a.sum/a.n):0
+    }});
+  }});
+  if(rows.length===0){{
+    ctx.fillStyle="#888";
+    ctx.font="12px sans-serif";
+    ctx.fillText("No groups available.",10,22);
+    return;
+  }}
+
+  var metric=(groupMetric&&groupMetric.value==="mean")?"mean":"fraction";
+  rows.sort(function(a,b){{return b[metric]-a[metric];}});
+  rows=rows.slice(0,40);
+
+  var padL=58,padR=12,padT=16,padB=72;
+  var pw=w-padL-padR,ph=h-padT-padB;
+  if(pw<=10||ph<=10)return;
+  var yMin=(metric==="fraction")?0:Math.min.apply(null,rows.map(function(r){{return r.mean;}}));
+  var yMax=Math.max.apply(null,rows.map(function(r){{return metric==="fraction"?r.fraction:r.mean;}}));
+  if(yMax<=yMin)yMax=yMin+1e-9;
+  var bw=pw/rows.length;
+  ctx.strokeStyle="#888";
+  ctx.beginPath();
+  ctx.moveTo(padL,padT+ph);
+  ctx.lineTo(padL+pw,padT+ph);
+  ctx.stroke();
+  ctx.fillStyle="#222";
+  ctx.font="10px sans-serif";
+  ctx.textAlign="right";
+  ctx.fillText(yMax.toFixed(metric==="fraction"?2:3), padL-4, padT+9);
+  ctx.fillText(yMin.toFixed(metric==="fraction"?2:3), padL-4, padT+ph);
+
+  rows.forEach(function(r,idx){{
+    var val=(metric==="fraction")?r.fraction:r.mean;
+    var t=(val-yMin)/(yMax-yMin);
+    var bh=Math.max(1,ph*t);
+    var x=padL+idx*bw+bw*0.12;
+    var y=padT+ph-bh;
+    var rw=Math.max(1,bw*0.76);
+    ctx.fillStyle=(metric==="fraction")?"#2f6da6":"#3a9d5d";
+    ctx.fillRect(x,y,rw,bh);
+    ctx.save();
+    ctx.translate(x+rw*0.5,padT+ph+6);
+    ctx.rotate(-Math.PI/2);
+    ctx.textAlign="left";
+    ctx.fillStyle="#333";
+    ctx.fillText(r.label,0,0);
+    ctx.restore();
+  }});
+  ctx.fillStyle="#111";
+  ctx.font="11px sans-serif";
+  ctx.textAlign="left";
+  ctx.fillText(
+    gb+" \u2022 "+(metric==="fraction"?"High-score fraction (>=P75)":"Mean pathway score"),
+    padL,
+    h-10
+  );
+}}
 
 // Resolve which values+colors to use for a color-by key
 function resolveColor(key){{
@@ -933,6 +1106,7 @@ function drawAll(){{
     legendInfos.push(info);
   }}
   updateLegend(legendInfos);
+  drawGroupBars();
 }}
 
 function updateLegend(infos){{

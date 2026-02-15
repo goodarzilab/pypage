@@ -9,6 +9,7 @@ Usage::
 import argparse
 import os
 import sys
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -20,6 +21,11 @@ from .plotting import (
     plot_consistency_ranking, consistency_ranking_to_html,
     plot_pathway_embedding, interactive_report_to_html,
 )
+
+
+def _status(message):
+    ts = datetime.now().strftime("%H:%M:%S")
+    print(f"[{ts}] {message}", file=sys.stderr, flush=True)
 
 
 def _build_parser():
@@ -46,6 +52,10 @@ def _build_parser():
     parser.add_argument(
         "--gene-column", default=None,
         help="Column in adata.var containing gene symbols (default: use adata.var_names)",
+    )
+    parser.add_argument(
+        "--groupby", default=None,
+        help="Metadata column in adata.obs for report group-enrichment bars.",
     )
 
     # -- Gene sets ------------------------------------------------------------
@@ -375,6 +385,7 @@ def _generate_umap_pdfs_from_arrays(scores, pw_names, embeddings, results, outdi
 def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _status("Starting pypage-sc")
 
     # -- Validate conditional requirements ------------------------------------
     if args.draw_only:
@@ -388,13 +399,17 @@ def main(argv=None):
 
     if args.expression is not None and not args.draw_only and args.genes is None:
         parser.error("--genes is required when using --expression")
+    if args.groupby is not None and not args.draw_only and args.adata is None:
+        parser.error("--groupby requires --adata (metadata comes from adata.obs)")
 
     # -- Seed -----------------------------------------------------------------
     if args.seed is not None:
         np.random.seed(args.seed)
+        _status(f"Random seed set to {args.seed}")
 
     # -- Draw-only mode -------------------------------------------------------
     if args.draw_only:
+        _status("Running in draw-only mode")
         # Determine outdir and results path
         if args.outdir is not None:
             draw_outdir = args.outdir
@@ -405,6 +420,7 @@ def main(argv=None):
         else:
             draw_outdir = _stem(args.expression) + "_scPAGE"
         os.makedirs(draw_outdir, exist_ok=True)
+        _status(f"Draw output directory: {draw_outdir}")
 
         if args.results is None:
             args.results = os.path.join(draw_outdir, "results.tsv")
@@ -416,6 +432,7 @@ def main(argv=None):
             args.report = os.path.join(draw_outdir, "report.html")
 
         results = pd.read_csv(args.results, sep='\t')
+        _status(f"Loaded results table: {args.results} ({len(results)} pathways)")
 
         # Generate ranking plots (always)
         import matplotlib
@@ -437,19 +454,31 @@ def main(argv=None):
         # Try to load adata for report + UMAP PDFs
         adata_path = args.adata or os.path.join(draw_outdir, "adata.h5ad")
         if os.path.exists(adata_path):
+            _status(f"Loading AnnData for draw-only assets: {adata_path}")
             scores, pw_names, embeddings, metadata = _extract_draw_only_data(
                 adata_path, gene_column=args.gene_column)
+            _status(
+                f"Loaded draw-only data: {scores.shape[0]} cells, "
+                f"{scores.shape[1]} pathways, {len(embeddings)} embeddings"
+            )
+            if args.groupby is not None and args.groupby not in metadata:
+                parser.error(
+                    f"--groupby '{args.groupby}' not found in adata.obs categorical columns. "
+                    f"Available columns: {sorted(metadata.keys())}"
+                )
 
             # Build pathway_genes from gene sets if provided
             pathway_genes = _build_pathway_genes(args)
 
             # Generate UMAP PDFs
             if embeddings:
+                _status("Generating per-pathway embedding PDFs")
                 _generate_umap_pdfs_from_arrays(
                     scores, pw_names, embeddings, results, draw_outdir, args)
 
             # Generate interactive report
             if args.report and not args.no_report and embeddings:
+                _status("Building interactive report")
                 interactive_report_to_html(
                     results=results,
                     scores=scores,
@@ -460,6 +489,7 @@ def main(argv=None):
                     title=args.title or 'pyPAGE-SC Interactive Report',
                     pathway_genes=pathway_genes,
                     metadata=metadata,
+                    groupby=args.groupby,
                 )
                 print(f"Interactive report saved to {args.report}", file=sys.stderr)
         else:
@@ -474,6 +504,7 @@ def main(argv=None):
     else:
         outdir = _stem(source_path) + "_scPAGE"
     os.makedirs(outdir, exist_ok=True)
+    _status(f"Output directory: {outdir}")
 
     if args.output is None:
         args.output = os.path.join(outdir, "results.tsv")
@@ -493,8 +524,12 @@ def main(argv=None):
     genes = None
 
     if args.adata is not None:
+        _status(f"Loading AnnData: {args.adata}")
         import anndata
         adata = anndata.read_h5ad(args.adata)
+        _status(
+            f"AnnData loaded: {adata.n_obs} cells, {adata.n_vars} genes"
+        )
         if args.gene_column is not None:
             if args.gene_column not in adata.var.columns:
                 parser.error(
@@ -503,10 +538,20 @@ def main(argv=None):
                 )
             adata.var_names = adata.var[args.gene_column].astype(str).values
             adata.var_names_make_unique()
+            _status(f"Gene symbols mapped from adata.var['{args.gene_column}']")
+        if args.groupby is not None and args.groupby not in adata.obs.columns:
+            parser.error(
+                f"--groupby '{args.groupby}' not found in adata.obs. "
+                f"Available columns: {list(adata.obs.columns)}"
+            )
     else:
+        _status(f"Loading expression matrix: {args.expression}")
         expression = np.loadtxt(args.expression, delimiter="\t")
         with open(args.genes) as f:
             genes = np.array([line.strip() for line in f if line.strip()])
+        _status(
+            f"Expression loaded: {expression.shape[0]} cells, {expression.shape[1]} genes"
+        )
 
     # -- Load gene sets -------------------------------------------------------
     if args.genesets is not None:
@@ -519,6 +564,9 @@ def main(argv=None):
         gs = GeneSets(ann["gene"], ann["pathway"])
     else:
         gs = GeneSets.from_gmt(args.gmt)
+    _status(
+        f"Gene sets loaded: {len(gs.pathways)} pathways, {len(gs.genes)} unique genes"
+    )
 
     # -- Create SingleCellPAGE ------------------------------------------------
     sc = SingleCellPAGE(
@@ -533,13 +581,23 @@ def main(argv=None):
         permutation_chunk_size=args.perm_chunk_size,
         n_jobs=args.n_jobs,
     )
+    _status(
+        f"SingleCellPAGE initialized: {sc.n_cells} cells, {sc.n_pathways} pathways, "
+        f"shared genes={len(sc.shared_genes)}"
+    )
 
     # -- Run ------------------------------------------------------------------
     if args.manual is not None:
+        _status("Manual mode: scoring selected pathways (no permutation test)")
         pathway_names = _parse_manual(args.manual)
         results = sc.run_manual(pathway_names)
     else:
+        _status(
+            "Running full analysis: scoring pathways, Geary's C, permutation testing "
+            f"({args.n_permutations} permutations)"
+        )
         results = sc.run(n_permutations=args.n_permutations)
+    _status("Analysis complete")
 
     # -- Write results --------------------------------------------------------
     results.to_csv(args.output, sep="\t", index=False)
@@ -592,6 +650,7 @@ def main(argv=None):
     # -- Interactive report ---------------------------------------------------
     if args.report and not args.no_report:
         if sc.embeddings:
+            _status("Generating interactive report")
             # Build pathway_genes dict from GeneSets
             pathway_genes = {}
             pw_names_for_report = list(sc.pathway_names) if args.manual is None else pathway_names
@@ -619,6 +678,7 @@ def main(argv=None):
                 title=args.title or 'pyPAGE-SC Interactive Report',
                 pathway_genes=pathway_genes,
                 metadata=report_metadata,
+                groupby=args.groupby,
             )
             print(f"Interactive report saved to {args.report}", file=sys.stderr)
         else:

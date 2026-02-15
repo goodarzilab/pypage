@@ -307,12 +307,18 @@ class SingleCellPAGE:
         chunk_size = self.permutation_chunk_size or min(n_permutations, auto_chunk)
         chunk_size = max(1, min(int(chunk_size), n_permutations))
 
-        for size in tqdm(unique_sizes, desc="permutation testing"):
+        for size in tqdm(unique_sizes, desc="permutation testing (pathway sizes)"):
             size = int(size)
             pw_idxs = size_to_pathways[size]
             exceed_counts = np.zeros(len(pw_idxs), dtype=np.int64)
-
-            for start in range(0, n_permutations, chunk_size):
+            chunk_starts = range(0, n_permutations, chunk_size)
+            chunk_bar = tqdm(
+                chunk_starts,
+                total=(n_permutations + chunk_size - 1) // chunk_size,
+                desc=f"  size={size} ({len(pw_idxs)} pathways)",
+                leave=False,
+            )
+            for start in chunk_bar:
                 end = min(start + chunk_size, n_permutations)
                 n_chunk = end - start
 
@@ -338,6 +344,7 @@ class SingleCellPAGE:
                 for i, p_idx in enumerate(pw_idxs):
                     observed = self.consistency[p_idx]
                     exceed_counts[i] += np.sum(null_c_primes >= observed)
+                chunk_bar.set_postfix_str(f"perm {end}/{n_permutations}")
 
             # Final empirical p-values for pathways of this size
             for i, p_idx in enumerate(pw_idxs):
@@ -401,12 +408,25 @@ class SingleCellPAGE:
         pd.DataFrame
             Results with columns: pathway, consistency, p-value, FDR.
         """
+        pipeline_bar = tqdm(total=4, desc="single-cell pipeline", leave=True)
         self._set_jobs()
         self._build_knn_graph()
+        pipeline_bar.update(1)
+        pipeline_bar.set_postfix_str("knn graph ready")
+
         self.scores = self._score_pathways()
+        pipeline_bar.update(1)
+        pipeline_bar.set_postfix_str("pathway scores ready")
+
         self.consistency = self._compute_geary_c(self.scores)
+        pipeline_bar.update(1)
+        pipeline_bar.set_postfix_str("geary c ready")
+
         self.pvalues = self._permutation_test(n_permutations=n_permutations)
         self.fdr = benjamini_hochberg(self.pvalues)
+        pipeline_bar.update(1)
+        pipeline_bar.set_postfix_str("permutation test ready")
+        pipeline_bar.close()
 
         self.results = pd.DataFrame({
             'pathway': self.pathway_names,

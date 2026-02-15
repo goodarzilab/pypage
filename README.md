@@ -251,6 +251,9 @@ pypage-sc --adata data.h5ad --gene-column gene --gmt pathways.gmt
 # Manual mode (bypass permutation testing)
 pypage-sc --adata data.h5ad --gmt pathways.gmt \
     --manual "HALLMARK_INTERFERON_ALPHA_RESPONSE,HALLMARK_G2M_CHECKPOINT"
+
+# Grouped enrichment bars in report (by metadata column)
+pypage-sc --adata data.h5ad --gmt pathways.gmt --groupby PhenoGraph_clusters
 ```
 
 ### Example: Colorectal Cancer (CRC) Atlas
@@ -285,6 +288,7 @@ The top pathway is **HALLMARK_INTERFERON_ALPHA_RESPONSE** (consistency C' = 0.52
 - Browse all pathways in a searchable sidebar, sorted by consistency
 - Click a pathway to color the UMAP by per-cell scores
 - Switch between available embeddings (UMAP, t-SNE, PCA)
+- Show per-group enrichment bars (high-score fraction or mean score) using `--groupby`
 
 **`adata.h5ad`** contains all pathway scores as `scPAGE_*` columns in `adata.obs`, ready for downstream analysis with scanpy:
 
@@ -311,6 +315,9 @@ pypage-sc --adata data.h5ad --gmt pathways.gmt --embedding-key X_tsne
 
 # Save per-cell scores matrix as TSV
 pypage-sc --adata data.h5ad --gmt pathways.gmt --scores scores.tsv
+
+# Re-render plots/report from saved outputs, preserving group bars
+pypage-sc --draw-only --outdir CRC_scPAGE --groupby PhenoGraph_clusters
 ```
 
 Run `pypage-sc --help` for a full list of options.
