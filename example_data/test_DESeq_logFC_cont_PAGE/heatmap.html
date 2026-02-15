@@ -1,0 +1,324 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'>
+<title>pyPAGE Enrichment Heatmap</title>
+<style>
+body { font-family: Helvetica, Arial, sans-serif; margin: 20px; }
+h1 { font-size: 1.3em; }
+table.main { border-collapse: collapse; }
+td.grid { width: 55px; height: 30px; border: none; }
+td.gridheader { width: 55px; background: #000; border: 1px solid #333;
+  position: relative; overflow: hidden; }
+td.gridlabel { white-space: nowrap; padding-left: 5px; font-size: 11px; border: none; }
+td.gridreg { width: 30px; height: 30px; border: none; text-align: center; font-size: 10px; }
+#tooltip { position: fixed; background: #333; color: #fff; padding: 6px 10px;
+  border-radius: 4px; font-size: 11px; pointer-events: none; display: none; z-index: 999; }
+</style></head><body>
+<div id="tooltip"></div>
+<script>
+var tip = document.getElementById('tooltip');
+function showTip(e, text) { tip.style.display='block'; tip.innerHTML=text;
+  tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY+12)+'px'; }
+function hideTip() { tip.style.display='none'; }
+</script>
+<div style="display:flex; align-items:flex-start; gap:20px;">
+<div style="display:flex; align-items:center; gap:4px;">
+<div style="writing-mode:vertical-rl; transform:rotate(180deg); font-size:11px; font-family:Helvetica,Arial,sans-serif;">gene-set enrichment</div>
+<div>
+<div style="font-size:9px; text-align:center;">5</div>
+<div style="width:18px; height:3px; background:rgb(200,0,0);"></div>
+<div style="width:18px; height:3px; background:rgb(209,7,7);"></div>
+<div style="width:18px; height:3px; background:rgb(218,15,15);"></div>
+<div style="width:18px; height:3px; background:rgb(227,22,22);"></div>
+<div style="width:18px; height:3px; background:rgb(236,29,29);"></div>
+<div style="width:18px; height:3px; background:rgb(245,37,37);"></div>
+<div style="width:18px; height:3px; background:rgb(255,45,45);"></div>
+<div style="width:18px; height:3px; background:rgb(252,54,54);"></div>
+<div style="width:18px; height:3px; background:rgb(249,64,64);"></div>
+<div style="width:18px; height:3px; background:rgb(246,74,74);"></div>
+<div style="width:18px; height:3px; background:rgb(243,84,84);"></div>
+<div style="width:18px; height:3px; background:rgb(240,94,94);"></div>
+<div style="width:18px; height:3px; background:rgb(237,103,103);"></div>
+<div style="width:18px; height:3px; background:rgb(233,105,106);"></div>
+<div style="width:18px; height:3px; background:rgb(228,105,108);"></div>
+<div style="width:18px; height:3px; background:rgb(223,107,111);"></div>
+<div style="width:18px; height:3px; background:rgb(219,107,113);"></div>
+<div style="width:18px; height:3px; background:rgb(214,109,116);"></div>
+<div style="width:18px; height:3px; background:rgb(209,110,118);"></div>
+<div style="width:18px; height:3px; background:rgb(205,110,121);"></div>
+<div style="width:18px; height:3px; background:rgb(200,112,123);"></div>
+<div style="width:18px; height:3px; background:rgb(195,112,126);"></div>
+<div style="width:18px; height:3px; background:rgb(191,114,128);"></div>
+<div style="width:18px; height:3px; background:rgb(186,114,131);"></div>
+<div style="width:18px; height:3px; background:rgb(182,116,133);"></div>
+<div style="width:18px; height:3px; background:rgb(177,117,136);"></div>
+<div style="width:18px; height:3px; background:rgb(172,117,138);"></div>
+<div style="width:18px; height:3px; background:rgb(168,119,141);"></div>
+<div style="width:18px; height:3px; background:rgb(163,119,143);"></div>
+<div style="width:18px; height:3px; background:rgb(158,121,145);"></div>
+<div style="width:18px; height:3px; background:rgb(154,121,148);"></div>
+<div style="width:18px; height:3px; background:rgb(149,123,150);"></div>
+<div style="width:18px; height:3px; background:rgb(144,124,153);"></div>
+<div style="width:18px; height:3px; background:rgb(140,124,155);"></div>
+<div style="width:18px; height:3px; background:rgb(135,126,158);"></div>
+<div style="width:18px; height:3px; background:rgb(130,126,160);"></div>
+<div style="width:18px; height:3px; background:rgb(126,128,163);"></div>
+<div style="width:18px; height:3px; background:rgb(121,128,165);"></div>
+<div style="width:18px; height:3px; background:rgb(116,130,168);"></div>
+<div style="width:18px; height:3px; background:rgb(112,130,170);"></div>
+<div style="width:18px; height:3px; background:rgb(107,131,173);"></div>
+<div style="width:18px; height:3px; background:rgb(102,133,175);"></div>
+<div style="width:18px; height:3px; background:rgb(98,133,178);"></div>
+<div style="width:18px; height:3px; background:rgb(93,135,180);"></div>
+<div style="width:18px; height:3px; background:rgb(88,135,183);"></div>
+<div style="width:18px; height:3px; background:rgb(84,137,185);"></div>
+<div style="width:18px; height:3px; background:rgb(79,137,188);"></div>
+<div style="width:18px; height:3px; background:rgb(74,138,190);"></div>
+<div style="width:18px; height:3px; background:rgb(70,140,192);"></div>
+<div style="width:18px; height:3px; background:rgb(65,140,195);"></div>
+<div style="width:18px; height:3px; background:rgb(60,142,197);"></div>
+<div style="width:18px; height:3px; background:rgb(56,142,200);"></div>
+<div style="width:18px; height:3px; background:rgb(51,144,202);"></div>
+<div style="width:18px; height:3px; background:rgb(46,144,205);"></div>
+<div style="width:18px; height:3px; background:rgb(42,145,207);"></div>
+<div style="width:18px; height:3px; background:rgb(37,147,210);"></div>
+<div style="width:18px; height:3px; background:rgb(32,147,212);"></div>
+<div style="width:18px; height:3px; background:rgb(28,149,215);"></div>
+<div style="width:18px; height:3px; background:rgb(23,149,217);"></div>
+<div style="width:18px; height:3px; background:rgb(18,151,220);"></div>
+<div style="width:18px; height:3px; background:rgb(14,151,222);"></div>
+<div style="width:18px; height:3px; background:rgb(9,153,225);"></div>
+<div style="width:18px; height:3px; background:rgb(4,154,227);"></div>
+<div style="width:18px; height:3px; background:rgb(0,154,230);"></div>
+<div style="font-size:9px; text-align:center;">-5</div>
+</div></div>
+<table class="main" cellpadding="0" cellspacing="0">
+<tr style="height:45px">
+<td class="gridheader" title="lower bound = -9.36, upper bound = -0.56"><div style="position:absolute; left:0; right:0; bottom:0.0%; height:48.9%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = -0.56, upper bound = -0.30"><div style="position:absolute; left:0; right:0; bottom:48.9%; height:2.0%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = -0.30, upper bound = -0.17"><div style="position:absolute; left:0; right:0; bottom:50.3%; height:2.0%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = -0.17, upper bound = -0.07"><div style="position:absolute; left:0; right:0; bottom:51.1%; height:2.0%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = -0.07, upper bound = 0.03"><div style="position:absolute; left:0; right:0; bottom:51.7%; height:2.0%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = 0.03, upper bound = 0.13"><div style="position:absolute; left:0; right:0; bottom:52.2%; height:2.0%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = 0.13, upper bound = 0.26"><div style="position:absolute; left:0; right:0; bottom:52.7%; height:2.0%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = 0.26, upper bound = 0.55"><div style="position:absolute; left:0; right:0; bottom:53.5%; height:2.0%; background:#F00;"></div></td>
+<td class="gridheader" title="lower bound = 0.55, upper bound = 8.64"><div style="position:absolute; left:0; right:0; bottom:55.0%; height:45.0%; background:#F00;"></div></td>
+<td style="border:none; font-size:9px; vertical-align:top; padding-left:4px; white-space:nowrap;">8.636</td>
+</tr>
+<tr style="height:0px;">
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; height:0;"></td>
+<td style="border:none; font-size:9px; vertical-align:bottom; padding-left:4px; white-space:nowrap; position:relative; top:-14px;">-9.361</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_0: -0.918<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_1: -0.428<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(74,138,190)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_2: -2.462<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(74,138,190)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_3: -2.462<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(93,135,180)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_4: -1.790<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_5: 0.327<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_6: -0.428<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_7: -0.277<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'HECKER_IFNB1_TARGETS<br>Bin bin_8: 8.000<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">HECKER_IFNB1_TARGETS</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(186,114,131)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_0: 1.404<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(172,117,138)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_1: 0.822<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_2: -0.856<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(70,140,192)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_3: -2.584<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(60,142,197)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_4: -2.900<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(126,128,163)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_5: -0.723<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_6: -0.856<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(172,117,138)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_7: 0.822<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'REACTOME_NEURONAL_SYSTEM<br>Bin bin_8: 5.092<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">REACTOME_NEURONAL_SYSTEM</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(88,135,183)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_0: -1.947<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(88,135,183)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_1: -1.947<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_2: 0.380<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_3: -0.234<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(126,128,163)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_4: -0.721<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_5: 0.380<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(186,114,131)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_6: 1.268<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_7: 0.380<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(195,112,126)" onmousemove="showTip(event,'REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE<br>Bin bin_8: 1.682<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">REACTOME_TRANSLESION_SYNTHESIS_BY_Y_FAMILY_DNA_POLYMERASES_BYPASSES_LESIONS_ON_DNA_TEMPLATE</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_0: 8.000<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(168,119,141)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_1: 0.671<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(88,135,183)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_2: -1.888<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(32,147,212)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_3: -3.903<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_4: -7.980<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_5: -5.157<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(23,149,217)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_6: -4.097<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(126,128,163)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_7: -0.640<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Bin bin_8: 8.000<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(182,116,133)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_0: 1.197<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_1: -0.305<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_2: -0.608<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_3: -0.437<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(102,133,175)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_4: -1.433<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_5: -0.825<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(102,133,175)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_6: -1.433<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_7: 0.422<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(255,45,45)" onmousemove="showTip(event,'DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP<br>Bin bin_8: 4.012<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">DESERT_PERIPORTAL_HEPATOCELLULAR_CARCINOMA_SUBCLASS_UP</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_0: 5.085<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_1: -0.479<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(42,145,207)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_2: -3.482<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_3: -0.915<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(112,130,170)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_4: -1.223<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_5: -0.915<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_6: -0.479<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(154,121,148)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_7: 0.271<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(233,105,106)" onmousemove="showTip(event,'WP_GPCRS_CLASS_A_RHODOPSINLIKE<br>Bin bin_8: 2.816<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">WP_GPCRS_CLASS_A_RHODOPSINLIKE</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_0: -4.979<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(116,130,168)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_1: -1.060<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(74,138,190)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_2: -2.492<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_3: -0.337<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(246,74,74)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_4: 3.569<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(223,107,111)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_5: 2.528<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(177,117,136)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_6: 0.995<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(182,116,133)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_7: 1.146<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(112,130,170)" onmousemove="showTip(event,'WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP<br>Bin bin_8: -1.239<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">WAMUNYOKOLI_OVARIAN_CANCER_LMP_UP</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_0: 0.379<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(116,130,168)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_1: -1.075<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(116,130,168)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_2: -1.075<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_3: -0.235<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_4: -0.515<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(214,109,116)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_5: 2.231<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(168,119,141)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_6: 0.702<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(116,130,168)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_7: -1.075<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(168,119,141)" onmousemove="showTip(event,'WP_CAFFEINE_IN_MYOCYTES<br>Bin bin_8: 0.702<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">WP_CAFFEINE_IN_MYOCYTES</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_0: 5.389<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(177,117,136)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_1: 0.966<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_2: -0.868<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(112,130,170)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_3: -1.115<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(93,135,180)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_4: -1.766<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(65,140,195)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_5: -2.686<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(84,137,185)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_6: -2.186<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(177,117,136)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_7: 0.966<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(191,114,128)" onmousemove="showTip(event,'CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP<br>Bin bin_8: 1.416<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">CHIANG_LIVER_CANCER_SUBCLASS_CTNNB1_UP</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(240,94,94)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_0: 3.256<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_1: 0.421<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_2: -0.415<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(102,133,175)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_3: -1.434<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_4: -0.415<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(126,128,163)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_5: -0.780<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(102,133,175)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_6: -1.434<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_7: -0.415<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(191,114,128)" onmousemove="showTip(event,'REACTOME_ASPIRIN_ADME<br>Bin bin_8: 1.524<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">REACTOME_ASPIRIN_ADME</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(205,110,121)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_0: 1.911<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(126,128,163)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_1: -0.661<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_2: -0.409<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(205,110,121)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_3: 1.911<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(98,133,178)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_4: -1.570<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(126,128,163)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_5: -0.661<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_6: -0.241<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_7: 0.371<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(126,128,163)" onmousemove="showTip(event,'KEGG_BASAL_CELL_CARCINOMA<br>Bin bin_8: -0.661<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">KEGG_BASAL_CELL_CARCINOMA</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(227,22,22)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_0: 4.505<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(172,117,138)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_1: 0.807<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_2: -0.277<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_3: -0.277<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(79,137,188)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_4: -2.308<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(98,133,178)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_5: -1.647<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(112,130,170)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_6: -1.137<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_7: -0.277<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(163,119,143)" onmousemove="showTip(event,'REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT<br>Bin bin_8: 0.536<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">REACTOME_SLC_MEDIATED_TRANSMEMBRANE_TRANSPORT</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(236,29,29)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_0: 4.276<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_1: -0.610<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(168,119,141)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_2: 0.668<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_3: -0.453<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(121,128,165)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_4: -0.805<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(116,130,168)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_5: -1.042<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(84,137,185)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_6: -2.083<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(116,130,168)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_7: -1.042<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,112,123)" onmousemove="showTip(event,'MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN<br>Bin bin_8: 1.790<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">MARTORIATI_MDM4_TARGETS_NEUROEPITHELIUM_DN</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(18,151,220)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_0: -4.223<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(177,117,136)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_1: 1.072<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(172,117,138)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_2: 0.932<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(249,64,64)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_3: 3.604<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(191,114,128)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_4: 1.558<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(140,124,155)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_5: -0.282<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_6: -0.528<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(112,130,170)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_7: -1.228<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(65,140,195)" onmousemove="showTip(event,'GABRIELY_MIR21_TARGETS<br>Bin bin_8: -2.705<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">GABRIELY_MIR21_TARGETS</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_0: -6.900<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_1: -0.493<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(172,117,138)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_2: 0.828<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(236,29,29)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_3: 4.315<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(227,22,22)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_4: 4.508<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(214,109,116)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_5: 2.199<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(168,119,141)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_6: 0.682<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(107,131,173)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_7: -1.320<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Bin bin_8: -7.998<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(28,149,215)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_0: -3.964<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(51,144,202)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_1: -3.243<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(135,126,158)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_2: -0.353<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(223,107,111)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_3: 2.625<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_4: 5.472<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_5: 5.472<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(158,121,145)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_6: 0.357<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_7: -6.058<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Bin bin_8: -4.858<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">REACTOME_EUKARYOTIC_TRANSLATION_INITIATION</td>
+</tr>
+<tr>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_0: -7.995<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(172,117,138)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_1: 0.932<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_2: 8.000<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,0,0)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_3: 7.949<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(245,37,37)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_4: 4.208<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(200,112,123)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_5: 1.733<br>over-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(130,126,160)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_6: -0.538<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_7: -5.162<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="grid" style="background:rgb(0,154,230)" onmousemove="showTip(event,'DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP<br>Bin bin_8: -8.000<br>under-represented')" onmouseout="hideTip()">&nbsp;</td>
+<td class="gridlabel">DIAZ_CHRONIC_MYELOGENOUS_LEUKEMIA_UP</td>
+</tr>
+</table>
+</div>
+</body></html>

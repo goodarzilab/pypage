@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pypage.cli_sc import _build_parser, main
+from pypage.cli_sc import _build_parser, _build_artifact_signatures, main
 from pypage.plotting import interactive_report_to_html
 
 
@@ -28,6 +28,86 @@ def test_sc_parser_accepts_redundancy_flags():
     assert args.redundancy_scope == "all"
     assert args.redundancy_fdr == 0.1
     assert args.killed == "killed.tsv"
+
+
+def test_sc_parser_accepts_score_chunk_size():
+    parser = _build_parser()
+    args = parser.parse_args(["--score-chunk-size", "128"])
+    assert args.score_chunk_size == 128
+
+
+def test_sc_parser_accepts_fast_mode():
+    parser = _build_parser()
+    args = parser.parse_args(["--fast-mode"])
+    assert args.fast_mode is True
+
+
+def test_sc_parser_accepts_resume():
+    parser = _build_parser()
+    args = parser.parse_args(["--resume"])
+    assert args.resume is True
+
+
+def test_sc_parser_accepts_report_range():
+    parser = _build_parser()
+    args = parser.parse_args(["--report-vmin", "-0.2", "--report-vmax", "0.8"])
+    assert args.report_vmin == -0.2
+    assert args.report_vmax == 0.8
+
+
+def test_sc_report_help_uses_sc_report_default():
+    parser = _build_parser()
+    report_action = next(a for a in parser._actions if a.dest == "report")
+    assert "outdir/sc_report.html" in report_action.help
+
+
+def test_artifact_signatures_change_for_report_knobs():
+    parser = _build_parser()
+    a = parser.parse_args(
+        [
+            "--top-n", "30",
+            "--fdr-threshold", "0.05",
+            "--groupby", "cluster",
+            "--sc-cmap", "ipage",
+            "--report-vmin", "-1",
+            "--report-vmax", "1",
+        ]
+    )
+    b = parser.parse_args(
+        [
+            "--top-n", "30",
+            "--fdr-threshold", "0.05",
+            "--groupby", "cluster",
+            "--sc-cmap", "viridis",
+            "--report-vmin", "-0.5",
+            "--report-vmax", "0.5",
+        ]
+    )
+    sig_a = _build_artifact_signatures(a)
+    sig_b = _build_artifact_signatures(b)
+    assert sig_a["report"] != sig_b["report"]
+    assert sig_a["umap"] != sig_b["umap"]
+
+
+def test_artifact_signatures_change_for_group_enrichment_knobs():
+    parser = _build_parser()
+    a = parser.parse_args(
+        [
+            "--groupby", "cluster",
+            "--group-enrichment-top-n", "10",
+            "--fdr-threshold", "0.05",
+        ]
+    )
+    b = parser.parse_args(
+        [
+            "--groupby", "cluster",
+            "--group-enrichment-top-n", "25",
+            "--fdr-threshold", "0.1",
+        ]
+    )
+    sig_a = _build_artifact_signatures(a)
+    sig_b = _build_artifact_signatures(b)
+    assert sig_a["group_enrichment"] != sig_b["group_enrichment"]
 
 
 def test_sc_groupby_requires_adata():

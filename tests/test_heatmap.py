@@ -69,3 +69,27 @@ def test_heatmap_with_reg():
     hm.add_gene_expression(test_pathways, test_reg_exp)
     hm.show(show_reg=True)
 
+
+def test_heatmap_matrix_uses_bin_labels(tmp_path):
+    hm = Heatmap(
+        pathways=np.array(["PW1", "PW2"], dtype=object),
+        graphical_ar=np.array([[1.0, -1.0], [0.5, -0.5]], dtype=float),
+        bin_labels=np.array(["1", "2"], dtype=object),
+    )
+    out = tmp_path / "matrix.tsv"
+    hm.save_matrix(str(out))
+    text = out.read_text().splitlines()
+    assert text[1] == "pathway\t1\t2"
+
+
+def test_heatmap_to_html_discrete_bin_labels_no_crash(tmp_path):
+    hm = Heatmap(
+        pathways=np.array(["PW1"], dtype=object),
+        graphical_ar=np.array([[1.0, -1.0]], dtype=float),
+        bin_labels=np.array(["1", "2"], dtype=object),
+    )
+    out = tmp_path / "heatmap.html"
+    hm.to_html(str(out), max_rows=10, min_val=-2.0, max_val=2.0, title="disc")
+    html = out.read_text()
+    assert ">1<" in html
+    assert ">2<" in html

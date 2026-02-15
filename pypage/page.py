@@ -21,7 +21,7 @@ from .heatmap import Heatmap
 import numpy as np
 import numba as nb
 import pandas as pd
-from tqdm import tqdm
+import sys
 from typing import Optional, Tuple
 
 
@@ -163,6 +163,7 @@ class PAGE:
         self._set_jobs()
         self.function = function
         self.redundancy_ratio = redundancy_ratio
+        self._killed_log = []
 
         # Validate parameters
         if not (0 < self.alpha < 1):
@@ -239,12 +240,7 @@ class PAGE:
         """Calculates mutual or conditional mutual information for each pathway
         """
         information = np.zeros((self.exp_bins.shape[0], self.num_pathways))
-        if self.function == 'mi':
-            desc = "calculating mutual information"
-        else:
-            desc = "calculating conditional mutual information"
-        pbar = tqdm(range(self.exp_bins.shape[0]), desc=desc)
-        for exp_idx in pbar:
+        for exp_idx in range(self.exp_bins.shape[0]):
             for idx in range(self.num_pathways):
                 if self.function == 'mi':
                     information[exp_idx, idx] = mutual_information(
@@ -273,8 +269,7 @@ class PAGE:
         overrep_pvals = np.zeros((self.pathway_indices.size, self.x_bins))
         underrep_pvals = np.zeros_like(overrep_pvals)
 
-        pbar = tqdm(enumerate(self.pathway_indices), desc="hypergeometric tests")
-        for idx, info_idx in pbar:
+        for idx, info_idx in enumerate(self.pathway_indices):
             pvals = hypergeometric_test(
                 self.exp_bins,
                 self.ont_bool[info_idx])
@@ -290,10 +285,42 @@ class PAGE:
         informative = np.zeros_like(self.information)
         pvalues = np.ones_like(self.information)
         zscores = np.full_like(self.information, np.nan)
+        accepted_nonredundant = []
 
         # iterate through most informative pathways
-        pbar = tqdm(np.argsort(self.information)[::-1], desc="permutation testing")
-        for idx in pbar:
+        sorted_idx = np.argsort(self.information)[::-1]
+        for rank, idx in enumerate(sorted_idx, start=1):
+            pathway_name = self.ontology.pathways[idx]
+            if self.filter_redundant and len(accepted_nonredundant) > 0:
+                all_ri = np.zeros(len(accepted_nonredundant))
+                for i, e in enumerate(accepted_nonredundant):
+                    all_ri[i] = measure_redundancy(
+                        self.exp_bins,
+                        self.ont_bool[idx],
+                        self.ont_bool[e],
+                        self.x_bins,
+                        self.y_bins,
+                        self.y_bins,
+                    )
+                if not np.all(all_ri > self.redundancy_ratio):
+                    min_idx = int(np.argmin(all_ri))
+                    killer_idx = accepted_nonredundant[min_idx]
+                    print(
+                        (
+                            f"[filtered:redundancy] pathway={pathway_name} "
+                            f"killed_by={self.ontology.pathways[killer_idx]} "
+                            f"ratio={all_ri[min_idx]:.6g} "
+                            f"threshold={self.redundancy_ratio:.6g}"
+                        ),
+                        file=sys.stdout,
+                        flush=True,
+                    )
+                    self._killed_log.append((
+                        pathway_name,
+                        self.ontology.pathways[killer_idx],
+                        all_ri[min_idx],
+                    ))
+                    continue
 
             # calculate mutual information of random permutations
             if self.function == 'mi':
@@ -325,14 +352,44 @@ class PAGE:
             else:
                 zscores[idx] = np.inf if self.information[idx] > permutations.mean() else 0.0
 
+            passed = bool(pvalues[idx] <= self.alpha)
+            print(
+                (
+                    f"[permutation] rank={rank}/{self.num_pathways} "
+                    f"pathway={pathway_name} "
+                    f"CMI={self.information[idx]:.6g} "
+                    f"z={zscores[idx]:.6g} "
+                    f"p={pvalues[idx]:.4e} "
+                    f"pass={passed}"
+                ),
+                file=sys.stdout,
+                flush=True,
+            )
+
             if pvalues[idx] > self.alpha:
+                print(
+                    (
+                        f"[filtered:alpha] pathway={pathway_name} "
+                        f"p={pvalues[idx]:.4e} > alpha={self.alpha:.4e}"
+                    ),
+                    file=sys.stdout,
+                    flush=True,
+                )
                 n_break += 1
                 if n_break == self.k:
+                    print(
+                        f"[permutation] early_stopping after={rank} pathways k={self.k}",
+                        file=sys.stdout,
+                        flush=True,
+                    )
                     break
             else:
                 informative[idx] = 1
+                if self.filter_redundant:
+                    accepted_nonredundant.append(idx)
                 n_break = 0
 
+        self.pathway_indices = np.array(accepted_nonredundant, dtype=int)
         return (informative, pvalues, zscores)
 
     def _consolidate_pathways(self) -> np.ndarray:
@@ -343,8 +400,7 @@ class PAGE:
         informative_mask = self.informative.astype(bool)
 
         # iterate through cmi in descending order
-        pbar = tqdm(np.argsort(self.information)[::-1], desc="consolidating redundant pathways")
-        for idx in pbar:
+        for idx in np.argsort(self.information)[::-1]:
 
             # skip indices that are not informative
             if not informative_mask[idx]:
@@ -374,6 +430,16 @@ class PAGE:
                 # Track which accepted pathway caused the rejection
                 min_idx = int(np.argmin(all_ri))
                 killer_idx = existing[min_idx]
+                print(
+                    (
+                        f"[filtered:redundancy] pathway={self.ontology.pathways[idx]} "
+                        f"killed_by={self.ontology.pathways[killer_idx]} "
+                        f"ratio={all_ri[min_idx]:.6g} "
+                        f"threshold={self.redundancy_ratio:.6g}"
+                    ),
+                    file=sys.stdout,
+                    flush=True,
+                )
                 self._killed_log.append((
                     self.ontology.pathways[idx],
                     self.ontology.pathways[killer_idx],
@@ -429,7 +495,8 @@ class PAGE:
 
         hm = Heatmap(np.array(self.results['pathway']),
                      self.graphical_ar,
-                     bin_edges=getattr(self.expression, 'bin_edges', None))
+                     bin_edges=getattr(self.expression, 'bin_edges', None),
+                     bin_labels=getattr(self.expression, 'bin_labels', None))
 
         hm.add_gene_expression(self.expression.genes, self.expression.raw_expression)
         return hm
@@ -459,11 +526,9 @@ class PAGE:
         # select informative pathways
         self.informative, self.pvalues, self.zscores = self._calculate_informative()
 
-        # filter redundant pathways
+        # filter redundant pathways (online during informative scan)
         all_informative_indices = np.flatnonzero(self.informative)
-        if self.filter_redundant:
-            self.pathway_indices = self._consolidate_pathways()
-        else:
+        if not self.filter_redundant:
             self.pathway_indices = all_informative_indices
 
         # Build full_results containing all informative pathways with redundancy flag

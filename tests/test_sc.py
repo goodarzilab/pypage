@@ -144,6 +144,14 @@ class TestSingleCellPAGEInit:
                 permutation_chunk_size=0,
             )
 
+    def test_init_bad_score_chunk_size(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        with pytest.raises(ValueError, match="score_chunk_size must be"):
+            SingleCellPAGE(
+                expression=expression, genes=genes, genesets=gs,
+                score_chunk_size=0,
+            )
+
     def test_init_bad_redundancy_ratio(self, synthetic_data):
         expression, genes, gs, _ = synthetic_data
         with pytest.raises(ValueError, match="redundancy_ratio must be"):
@@ -174,6 +182,19 @@ class TestSingleCellPAGEInit:
             SingleCellPAGE(
                 expression=np.ones(500), genes=genes, genesets=gs
             )
+
+    def test_init_drops_zero_overlap_pathways(self):
+        expression = np.random.randn(20, 6)
+        genes = np.array([f"g{i}" for i in range(6)])
+        gs = GeneSets(
+            genes=np.array(["g0", "g1", "missing_gene"]),
+            pathways=np.array(["present_pw", "present_pw", "missing_pw"]),
+        )
+        sc = SingleCellPAGE(expression=expression, genes=genes, genesets=gs)
+        assert sc.n_pathways == 1
+        assert sc.n_pathways_input == 2
+        assert sc.n_pathways_dropped_zero_shared == 1
+        assert list(sc.pathway_names) == ["present_pw"]
 
     def test_repr(self, synthetic_data):
         expression, genes, gs, _ = synthetic_data
@@ -368,6 +389,47 @@ class TestSingleCellPAGERun:
         assert len(results) < sc.n_pathways
         assert hasattr(sc, 'full_results')
         assert 'redundant' in sc.full_results.columns
+
+    def test_fast_mode_prefilters_before_permutation(self):
+        rng = np.random.RandomState(1)
+        n_cells = 60
+        n_genes = 40
+        genes = np.array([f"g{i}" for i in range(n_genes)])
+        expression = rng.normal(size=(n_cells, n_genes))
+        expression[: n_cells // 2, :10] += 2.0
+        expression[n_cells // 2:, :10] -= 2.0
+
+        gs_genes = []
+        gs_pathways = []
+        for g in genes[:10]:
+            gs_genes.extend([g, g])
+            gs_pathways.extend(["dup_a", "dup_b"])
+        for g in genes[10:20]:
+            gs_genes.append(g)
+            gs_pathways.append("other")
+        gs = GeneSets(np.array(gs_genes), np.array(gs_pathways))
+
+        sc = SingleCellPAGE(
+            expression=expression,
+            genes=genes,
+            genesets=gs,
+            function='mi',
+            n_bins=4,
+            filter_redundant=True,
+            fast_mode=True,
+            redundancy_scope='all',
+            redundancy_ratio=5.0,
+        )
+        np.random.seed(11)
+        sc.run(n_permutations=20)
+        killed = sc.get_redundancy_log()
+        assert len(killed) >= 1
+
+        full = sc.full_results
+        redundant = full[full['redundant']]
+        assert len(redundant) >= 1
+        assert redundant['p-value'].isna().all()
+        assert redundant['FDR'].isna().all()
 
 
 class TestRunNeighborhoods:

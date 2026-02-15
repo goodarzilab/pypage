@@ -123,7 +123,8 @@ class Heatmap:
                  regulator_exp: Optional[np.ndarray] = None,
                  cmap_main: Optional[str] = 'ipage',
                  cmap_reg: Optional[str] = 'plasma',
-                 bin_edges: Optional[np.ndarray] = None):
+                 bin_edges: Optional[np.ndarray] = None,
+                 bin_labels: Optional[np.ndarray] = None):
         self.pathways = pathways
         self.graphical_ar = graphical_ar
         self.regulator_exp = regulator_exp
@@ -135,6 +136,12 @@ class Heatmap:
         self.genes = None
         self.isreg = False
         self.bin_edges = bin_edges
+        if bin_labels is None:
+            self.bin_labels = np.array([f"bin_{i}" for i in range(self.n_bins)], dtype=object)
+        else:
+            self.bin_labels = np.asarray(bin_labels, dtype=object)
+            if len(self.bin_labels) != self.n_bins:
+                self.bin_labels = np.array([f"bin_{i}" for i in range(self.n_bins)], dtype=object)
         self.is_continuous = bin_edges is not None
 
         self.regulator_names = [gene.split('_')[0] for gene in self.pathways]
@@ -342,15 +349,21 @@ class Heatmap:
                 ax.tick_params(axis='both', which='both', length=0)
 
         # Pathway labels on the right side of the main heatmap
+        x_ticks = np.arange(self.n_bins)
+        x_labels = [str(x) for x in self.bin_labels]
         if self.isreg:
             self.ax_reg.set(xticks=[], yticks=[])
-            self.ax_main.set(xticks=[], yticks=np.arange(n_pathways),
-                             yticklabels=pathways)
+            self.ax_main.set(yticks=np.arange(n_pathways), yticklabels=pathways)
             self.ax_main.yaxis.tick_right()
         else:
-            self.ax_main.set(xticks=[], yticks=np.arange(n_pathways),
-                             yticklabels=pathways)
+            self.ax_main.set(yticks=np.arange(n_pathways), yticklabels=pathways)
             self.ax_main.yaxis.tick_right()
+        if has_bar:
+            self.ax_main.set_xticks([])
+        else:
+            self.ax_main.set_xticks(x_ticks)
+            self.ax_main.set_xticklabels(x_labels, fontsize=7)
+            self.ax_main.xaxis.tick_top()
 
         self.fig.suptitle(title)
         self._add_colorbar(min_val, max_val)
@@ -443,11 +456,12 @@ class Heatmap:
             "n_pathways": int(self.n_pathways),
             "cmap_main": self.cmap_main,
             "cmap_reg": self.cmap_reg,
+            "bin_labels": [str(v) for v in self.bin_labels],
         }
         if self.bin_edges is not None:
             meta["bin_edges"] = [round(float(v), 6) for v in self.bin_edges]
 
-        header_cols = ["pathway"] + [f"bin_{i}" for i in range(self.n_bins)]
+        header_cols = ["pathway"] + [str(v) for v in self.bin_labels]
         lines = []
         lines.append("#META\t" + json.dumps(meta))
         lines.append("\t".join(header_cols))
@@ -496,6 +510,7 @@ class Heatmap:
             cmap_main=meta.get("cmap_main", "ipage"),
             cmap_reg=meta.get("cmap_reg", "plasma"),
             bin_edges=bin_edges,
+            bin_labels=np.array(meta.get("bin_labels", [f"bin_{i}" for i in range(graphical_ar.shape[1])]), dtype=object),
         )
         return hm
 
@@ -613,7 +628,8 @@ function hideTip() { tip.style.display='none'; }
         html_parts.append("\n".join(legend_html))
         html_parts.append('<table class="main" cellpadding="0" cellspacing="0">')
 
-        # iPAGE-style bin-edge header row (black cells with red range bars)
+        # Continuous mode: iPAGE-style bin-edge header row.
+        # Discrete mode: plain textual bin labels.
         has_bar = self.is_continuous and self.bin_edges is not None and len(self.bin_edges) == self.n_bins + 1
         if has_bar:
             bmin = bar_min if bar_min is not None else float(self.bin_edges[0])
@@ -654,6 +670,17 @@ function hideTip() { tip.style.display='none'; }
                 f'padding-left:4px; white-space:nowrap; position:relative; top:-14px;">'
                 f'{bmin:.4g}</td>')
             html_parts.append('</tr>')
+        else:
+            html_parts.append('<tr>')
+            if use_reg:
+                html_parts.append('<td style="border:none;"></td>')
+            for label in self.bin_labels:
+                html_parts.append(
+                    '<td style="font-size:10px; text-align:center; padding:2px 0;">'
+                    f'{str(label)}</td>'
+                )
+            html_parts.append('<td style="border:none;"></td>')
+            html_parts.append('</tr>')
 
         # Data rows
         for row_idx in range(n_pathways):
@@ -683,7 +710,8 @@ function hideTip() { tip.style.display='none'; }
                 val = graphical_ar[row_idx, bin_idx]
                 bg = _enrichment_color(val)
                 direction = _direction_label(val)
-                tip_text = f"{pw}<br>Bin {bin_idx}: {val:.3f}<br>{direction}"
+                bin_label = str(self.bin_labels[bin_idx])
+                tip_text = f"{pw}<br>Bin {bin_label}: {val:.3f}<br>{direction}"
                 html_parts.append(
                     f'<td class="grid" style="background:{bg}" '
                     f'onmousemove="showTip(event,\'{tip_text}\')" '

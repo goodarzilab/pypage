@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Optional, Dict, List
+from .utils import benjamini_hochberg
 
 
 def plot_pathway_embedding(
@@ -186,6 +187,184 @@ def plot_consistency_ranking(
     return ax
 
 
+def _select_top_pathways(results, top_n=10, fdr_threshold=0.05):
+    sig = results[results['FDR'] < fdr_threshold]
+    if len(sig) >= top_n:
+        top_df = sig.sort_values('consistency', ascending=False).head(top_n)
+    else:
+        top_df = results.sort_values('consistency', ascending=False).head(top_n)
+    return top_df['pathway'].tolist()
+
+
+def compute_group_enrichment_stats(
+    scores,
+    pathway_names,
+    results,
+    group_labels,
+    group_name='group',
+    top_n=10,
+    fdr_threshold=0.05,
+):
+    """Compute per-pathway group-enrichment stats (Kruskal + one-vs-rest U test)."""
+    from scipy.stats import kruskal, mannwhitneyu
+
+    group_labels = np.asarray(group_labels).astype(str)
+    if len(group_labels) != scores.shape[0]:
+        raise ValueError("group_labels length must match number of cells")
+
+    top_pathways = _select_top_pathways(results, top_n=top_n, fdr_threshold=fdr_threshold)
+    pw_to_idx = {pw: i for i, pw in enumerate(pathway_names)}
+    uniq = np.unique(group_labels)
+    uniq = np.array(sorted(uniq, key=lambda g: int(np.sum(group_labels == g)), reverse=True))
+
+    rows = []
+    for pw in top_pathways:
+        if pw not in pw_to_idx:
+            continue
+        vals = np.asarray(scores[:, pw_to_idx[pw]], dtype=np.float64)
+        thr = float(np.quantile(vals, 0.75))
+
+        group_arrays = []
+        frac = np.zeros(len(uniq), dtype=np.float64)
+        mean = np.zeros(len(uniq), dtype=np.float64)
+        n_group = np.zeros(len(uniq), dtype=np.int64)
+        for j, g in enumerate(uniq):
+            idx = group_labels == g
+            gv = vals[idx]
+            group_arrays.append(gv)
+            n_group[j] = int(gv.size)
+            if gv.size:
+                frac[j] = float(np.mean(gv >= thr))
+                mean[j] = float(np.mean(gv))
+
+        kw_p = np.nan
+        valid = [a for a in group_arrays if a.size > 0]
+        if len(valid) >= 2:
+            try:
+                kw_p = float(kruskal(*valid, nan_policy="omit").pvalue)
+            except Exception:
+                kw_p = np.nan
+
+        p_ovr = np.full(len(uniq), np.nan, dtype=np.float64)
+        for j, g in enumerate(uniq):
+            in_g = group_arrays[j]
+            out_g = vals[group_labels != g]
+            if in_g.size == 0 or out_g.size == 0:
+                continue
+            try:
+                p_ovr[j] = float(
+                    mannwhitneyu(in_g, out_g, alternative="two-sided", method="asymptotic").pvalue
+                )
+            except Exception:
+                p_ovr[j] = np.nan
+
+        q_ovr = np.full(len(uniq), np.nan, dtype=np.float64)
+        mask = np.isfinite(p_ovr)
+        if np.any(mask):
+            q_ovr[mask] = benjamini_hochberg(p_ovr[mask])
+
+        for j, g in enumerate(uniq):
+            rows.append({
+                "pathway": str(pw),
+                "group_name": str(group_name),
+                "group": str(g),
+                "n_group": int(n_group[j]),
+                "n_rest": int(vals.size - n_group[j]),
+                "high_activity_fraction_p75": float(frac[j]),
+                "mean_score": float(mean[j]),
+                "kw_p_value": float(kw_p) if np.isfinite(kw_p) else np.nan,
+                "one_vs_rest_p_value": float(p_ovr[j]) if np.isfinite(p_ovr[j]) else np.nan,
+                "one_vs_rest_fdr": float(q_ovr[j]) if np.isfinite(q_ovr[j]) else np.nan,
+            })
+    return pd.DataFrame(rows)
+
+
+def plot_group_enrichment_pdfs(stats_df, output_dir):
+    """Save per-pathway grouped barplots (fraction + mean score with significance stars)."""
+    import os
+
+    os.makedirs(output_dir, exist_ok=True)
+    out_paths = []
+    if stats_df is None or len(stats_df) == 0:
+        return out_paths
+
+    for pathway in stats_df['pathway'].drop_duplicates().tolist():
+        sdf = stats_df[stats_df['pathway'] == pathway].copy()
+        sdf = sdf.sort_values('n_group', ascending=False)
+        if len(sdf) == 0:
+            continue
+
+        x = np.arange(len(sdf))
+        frac = sdf['high_activity_fraction_p75'].values
+        mean = sdf['mean_score'].values
+        qvals = sdf['one_vs_rest_fdr'].values
+
+        fig_w = max(7.0, 0.32 * len(sdf) + 2.8)
+        fig, axes = plt.subplots(2, 1, figsize=(fig_w, 5.2), sharex=True)
+
+        axes[0].bar(x, frac, color="#2f6da6", edgecolor='none', width=0.82)
+        axes[0].set_ylabel("High-activity\nfraction (>=P75)", fontsize=8)
+        axes[0].set_ylim(0.0, max(0.05, float(np.max(frac) * 1.08)))
+        axes[0].grid(axis='y', alpha=0.2, linewidth=0.6)
+
+        axes[1].bar(x, mean, color="#3a9d5d", edgecolor='none', width=0.82)
+        axes[1].set_ylabel("Mean score", fontsize=8)
+        axes[1].grid(axis='y', alpha=0.2, linewidth=0.6)
+        axes[1].set_xticks(x)
+        axes[1].set_xticklabels(sdf['group'].astype(str).tolist(), rotation=90, fontsize=7)
+        axes[1].axhline(0, color="#666", linewidth=0.6, alpha=0.8)
+
+        ymax = float(np.nanmax(mean)) if len(mean) else 0.0
+        ymin = float(np.nanmin(mean)) if len(mean) else 0.0
+        yspan = max(1e-9, ymax - ymin)
+        pad = 0.12 * yspan + 0.02 * max(1.0, abs(ymax), abs(ymin))
+        low = min(0.0, ymin) - pad
+        high = max(0.0, ymax) + pad
+        axes[1].set_ylim(low, high)
+        yoff = 0.03 * (high - low)
+        for i, qv in enumerate(qvals):
+            if not np.isfinite(qv):
+                continue
+            star = ""
+            if qv < 1e-3:
+                star = "***"
+            elif qv < 1e-2:
+                star = "**"
+            elif qv < 5e-2:
+                star = "*"
+            if star:
+                val = mean[i]
+                if val >= 0:
+                    y = val + yoff
+                    va = 'bottom'
+                else:
+                    y = val - yoff
+                    va = 'top'
+                axes[1].text(
+                    i,
+                    y,
+                    star,
+                    ha='center',
+                    va=va,
+                    fontsize=8,
+                    color='#222',
+                )
+
+        kw_p = sdf['kw_p_value'].dropna().iloc[0] if sdf['kw_p_value'].notna().any() else np.nan
+        fig.suptitle(pathway, fontsize=9)
+        if np.isfinite(kw_p):
+            fig.text(0.01, 0.98, f"Kruskal-Wallis p={kw_p:.2e}", fontsize=8, va='top')
+        fig.text(0.60, 0.98, "Mann-Whitney one-vs-rest stars: BH-FDR", fontsize=7, va='top')
+
+        safe = pathway.replace('/', '_').replace('\\', '_').replace(' ', '_')
+        out = os.path.join(output_dir, f"sc_group_enrichment_{safe}.pdf")
+        fig.tight_layout(rect=[0, 0, 1, 0.95])
+        fig.savefig(out, bbox_inches='tight')
+        plt.close(fig)
+        out_paths.append(out)
+    return out_paths
+
+
 def consistency_ranking_to_html(
     results,
     output_path,
@@ -277,14 +456,14 @@ function hideTip() { tip.style.display='none'; }
         f.write("\n".join(html_parts))
 
 
-def _generate_viridis_lut(n=256):
-    """Generate a viridis colormap lookup table as a list of [R, G, B] ints.
+def _generate_cmap_lut(cmap_name='viridis', n=256):
+    """Generate a colormap lookup table as a list of [R, G, B] ints.
 
-    Uses matplotlib's viridis colormap at build time so the HTML report
+    Uses matplotlib colormaps at build time so the HTML report
     has no runtime dependency on matplotlib.
     """
     from matplotlib.cm import get_cmap
-    cmap = get_cmap('viridis', n)
+    cmap = get_cmap(cmap_name, n)
     lut = []
     for i in range(n):
         r, g, b, _ = cmap(i / (n - 1))
@@ -303,6 +482,10 @@ def interactive_report_to_html(
     pathway_genes=None,
     metadata=None,
     groupby=None,
+    cmap='viridis',
+    group_stats_df=None,
+    score_vmin=None,
+    score_vmax=None,
 ):
     """Generate a self-contained interactive HTML report (VISION-like).
 
@@ -388,8 +571,24 @@ def interactive_report_to_html(
     elif metadata_json:
         groupby_preferred = sorted(metadata_json.keys())[0]
 
-    # Viridis LUT
-    viridis_lut = _generate_viridis_lut(256)
+    # Colormap LUT
+    viridis_lut = _generate_cmap_lut(cmap_name=cmap, n=256)
+
+    group_stats = {}
+    if group_stats_df is not None and len(group_stats_df) > 0:
+        for _, row in group_stats_df.iterrows():
+            pw = str(row.get('pathway', ''))
+            gb = str(row.get('group_name', ''))
+            grp = str(row.get('group', ''))
+            if not pw or not gb or not grp:
+                continue
+            group_stats.setdefault(pw, {}).setdefault(gb, {"kw_p_value": None, "groups": {}})
+            kw = row.get('kw_p_value', np.nan)
+            if np.isfinite(kw):
+                group_stats[pw][gb]["kw_p_value"] = float(kw)
+            qv = row.get('one_vs_rest_fdr', np.nan)
+            if np.isfinite(qv):
+                group_stats[pw][gb]["groups"][grp] = float(qv)
 
     data_obj = {
         'pathways': pathways_json,
@@ -397,6 +596,9 @@ def interactive_report_to_html(
         'scores': scores_json,
         'metadata': metadata_json,
         'groupby_preferred': groupby_preferred,
+        'group_stats': group_stats,
+        'score_vmin': None if score_vmin is None else float(score_vmin),
+        'score_vmax': None if score_vmax is None else float(score_vmax),
         'n_cells': n_cells,
         'fdr_threshold': fdr_threshold,
     }
@@ -548,6 +750,11 @@ canvas.scatter{{display:block}}
       <div id="tabBar" style="display:flex;gap:4px"></div>
       <label style="font-size:12px;margin-left:8px">Color by:</label>
       <select class="color-select" id="colorBy"></select>
+      <label style="font-size:12px">vmin:</label>
+      <input class="color-select" id="colorVmin" type="number" step="any" placeholder="auto" style="max-width:95px">
+      <label style="font-size:12px">vmax:</label>
+      <input class="color-select" id="colorVmax" type="number" step="any" placeholder="auto" style="max-width:95px">
+      <button class="split-btn" id="rangeAutoBtn" title="Reset color range to auto">Auto range</button>
       <button class="split-btn" id="splitBtn" title="Split view">Split</button>
     </div>
     <div class="scatter-area" id="scatterArea">
@@ -614,6 +821,9 @@ var legendBar=document.getElementById("legendBar");
 var scatterArea=document.getElementById("scatterArea");
 var splitBtn=document.getElementById("splitBtn");
 var colorBySelect=document.getElementById("colorBy");
+var colorVmin=document.getElementById("colorVmin");
+var colorVmax=document.getElementById("colorVmax");
+var rangeAutoBtn=document.getElementById("rangeAutoBtn");
 var tooltip=document.getElementById("tooltip");
 var groupPanel=document.getElementById("groupPanel");
 var groupBySelect=document.getElementById("groupBySelect");
@@ -632,6 +842,12 @@ function fillColorSelect(sel,idx){{
   sel.onchange=function(){{colorBy[idx]=sel.value;drawAll();}};
 }}
 fillColorSelect(colorBySelect,0);
+if(colorVmin && DATA.score_vmin !== null && DATA.score_vmin !== undefined){{
+  colorVmin.value = Number(DATA.score_vmin);
+}}
+if(colorVmax && DATA.score_vmax !== null && DATA.score_vmax !== undefined){{
+  colorVmax.value = Number(DATA.score_vmax);
+}}
 
 // Embedding tabs
 embKeys.forEach(function(key){{
@@ -851,6 +1067,13 @@ initGroupBars();
 
 // Color-by change for single mode
 colorBySelect.onchange=function(){{colorBy[0]=colorBySelect.value;drawAll();}};
+if(colorVmin) colorVmin.oninput=function(){{drawAll();}};
+if(colorVmax) colorVmax.oninput=function(){{drawAll();}};
+if(rangeAutoBtn) rangeAutoBtn.onclick=function(){{
+  if(colorVmin) colorVmin.value="";
+  if(colorVmax) colorVmax.value="";
+  drawAll();
+}};
 
 function initGroupBars(){{
   if(!groupBySelect||!groupPanel) return;
@@ -945,6 +1168,10 @@ function drawGroupBars(){{
   }}
 
   var metric=(groupMetric&&groupMetric.value==="mean")?"mean":"fraction";
+  var pathwayStats=null;
+  if(DATA.group_stats && DATA.group_stats[curPw] && DATA.group_stats[curPw][gb]){{
+    pathwayStats=DATA.group_stats[curPw][gb];
+  }}
   rows.sort(function(a,b){{return b[metric]-a[metric];}});
   rows=rows.slice(0,40);
 
@@ -975,6 +1202,21 @@ function drawGroupBars(){{
     var rw=Math.max(1,bw*0.76);
     ctx.fillStyle=(metric==="fraction")?"#2f6da6":"#3a9d5d";
     ctx.fillRect(x,y,rw,bh);
+    if(metric==="mean" && pathwayStats && pathwayStats.groups){{
+      var qv = pathwayStats.groups[String(r.label)];
+      if(qv !== undefined && !isNaN(qv)){{
+        var star="";
+        if(qv<1e-3)star="***";
+        else if(qv<1e-2)star="**";
+        else if(qv<5e-2)star="*";
+        if(star){{
+          ctx.fillStyle="#111";
+          ctx.font="10px sans-serif";
+          ctx.textAlign="center";
+          ctx.fillText(star, x+rw*0.5, y-4);
+        }}
+      }}
+    }}
     ctx.save();
     ctx.translate(x+rw*0.5,padT+ph+6);
     ctx.rotate(-Math.PI/2);
@@ -991,6 +1233,11 @@ function drawGroupBars(){{
     padL,
     h-10
   );
+  if(pathwayStats && pathwayStats.kw_p_value !== null && pathwayStats.kw_p_value !== undefined){{
+    ctx.fillStyle="#444";
+    ctx.textAlign="right";
+    ctx.fillText("KW p="+Number(pathwayStats.kw_p_value).toExponential(2), w-padR, h-10);
+  }}
 }}
 
 // Resolve which values+colors to use for a color-by key
@@ -1070,8 +1317,13 @@ function drawPanel(idx){{
 
   if(colorInfo.type==="continuous"){{
     var vals=colorInfo.vals;
-    var vmin=Infinity,vmax=-Infinity;
-    for(var i=0;i<n;i++){{if(vals[i]<vmin)vmin=vals[i];if(vals[i]>vmax)vmax=vals[i];}}
+    var dataMin=Infinity,dataMax=-Infinity;
+    for(var i=0;i<n;i++){{if(vals[i]<dataMin)dataMin=vals[i];if(vals[i]>dataMax)dataMax=vals[i];}}
+    var inMin = colorVmin ? parseFloat(colorVmin.value) : NaN;
+    var inMax = colorVmax ? parseFloat(colorVmax.value) : NaN;
+    var vmin = isFinite(inMin) ? inMin : dataMin;
+    var vmax = isFinite(inMax) ? inMax : dataMax;
+    if(vmax < vmin){{var tmp=vmin;vmin=vmax;vmax=tmp;}}
     var vrange=vmax-vmin||1;
 
     var order=new Array(n);
@@ -1086,7 +1338,7 @@ function drawPanel(idx){{
       ctx.fillStyle="rgb("+c[0]+","+c[1]+","+c[2]+")";
       ctx.beginPath();ctx.arc(px_arr[i],py_arr[i],r,0,6.283);ctx.fill();
     }}
-    return {{type:"continuous",vmin:vmin,vmax:vmax}};
+    return {{type:"continuous",vmin:vmin,vmax:vmax,dataMin:dataMin,dataMax:dataMax}};
   }}
 
   if(colorInfo.type==="categorical"){{
