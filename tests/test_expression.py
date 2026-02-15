@@ -97,10 +97,20 @@ def test_load_bins():
 
 def test_load_bins_is_bin_keeps_values():
     genes = np.array([f"g.{g}" for g in np.arange(30)])
-    bins = np.random.choice(np.arange(N_BINS), size=30, p=np.array([0.6, 0.1, 0.1, 0.1, 0.1]))
+    bins = np.tile(np.arange(N_BINS), 6)
     exp = ExpressionProfile(genes, bins, is_bin=True, n_bins=N_BINS)
     subset = exp.get_gene_subset(genes)
     assert np.array_equal(subset, bins)
+
+
+def test_load_bins_is_bin_reindexes_shifted_labels():
+    genes = np.array([f"g.{g}" for g in np.arange(18)])
+    bins = np.tile(np.arange(1, 10), 2)
+    exp = ExpressionProfile(genes, bins, is_bin=True, n_bins=9)
+    subset = exp.get_gene_subset(genes)
+    assert subset.min() == 0
+    assert subset.max() == 8
+    assert np.array_equal(exp.bin_labels, np.array([str(i) for i in range(1, 10)], dtype=object))
 
 
 def test_expression_conversion_offline(monkeypatch):

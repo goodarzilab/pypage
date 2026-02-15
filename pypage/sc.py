@@ -6,6 +6,7 @@ KNN graph, and optionally running standard PAGE on neighborhood aggregates.
 """
 
 import math
+import time
 import numpy as np
 import numba as nb
 import pandas as pd
@@ -18,6 +19,7 @@ from .page import PAGE
 from .information import (
     mutual_information, conditional_mutual_information,
     batch_mutual_information_2d, batch_conditional_mutual_information_2d,
+    measure_redundancy,
 )
 from .spatial import geary_c, geary_c_batch, build_knn_graph
 from .utils import benjamini_hochberg
@@ -54,6 +56,9 @@ class SingleCellPAGE:
         Number of random gene sets to process per permutation chunk.
         Lower values reduce peak memory; default is an automatic
         memory-aware chunk size.
+    score_chunk_size : int, optional
+        Number of pathways to score per chunk. Smaller values improve
+        interrupt responsiveness at the cost of some overhead.
     connectivity : scipy.sparse matrix, optional
         Precomputed cell-cell connectivity matrix.
     function : str, optional
@@ -61,6 +66,18 @@ class SingleCellPAGE:
     n_jobs : int, optional
         Number of threads for Numba parallel execution. Default: 1.
         Set to 0 or None to use all available threads.
+    filter_redundant : bool, optional
+        Whether to apply redundancy filtering (CMI/MI ratio) after
+        permutation testing. Default: True.
+    redundancy_ratio : float, optional
+        CMI/MI ratio threshold. Candidate pathways with ratio <= this
+        threshold against an accepted pathway are marked redundant.
+        Default: 5.0.
+    redundancy_scope : str, optional
+        Which pathways to consider for redundancy filtering:
+        'fdr' (only FDR-significant pathways) or 'all'. Default: 'fdr'.
+    redundancy_fdr : float, optional
+        FDR threshold used when redundancy_scope='fdr'. Default: 0.05.
     """
 
     def __init__(
@@ -75,7 +92,13 @@ class SingleCellPAGE:
         function='cmi',
         bin_axis='cell',
         permutation_chunk_size=None,
+        score_chunk_size=256,
+        fast_mode=False,
         n_jobs=1,
+        filter_redundant=True,
+        redundancy_ratio=5.0,
+        redundancy_scope='fdr',
+        redundancy_fdr=0.05,
     ):
         if genesets is None:
             raise ValueError("genesets is required")
@@ -87,6 +110,22 @@ class SingleCellPAGE:
             raise ValueError(
                 f"permutation_chunk_size must be > 0 when provided, got {permutation_chunk_size!r}"
             )
+        if score_chunk_size is not None and int(score_chunk_size) <= 0:
+            raise ValueError(
+                f"score_chunk_size must be > 0 when provided, got {score_chunk_size!r}"
+            )
+        if redundancy_ratio is not None and float(redundancy_ratio) <= 0:
+            raise ValueError(
+                f"redundancy_ratio must be > 0, got {redundancy_ratio!r}"
+            )
+        if redundancy_scope not in ('fdr', 'all'):
+            raise ValueError(
+                f"redundancy_scope must be 'fdr' or 'all', got {redundancy_scope!r}"
+            )
+        if not (0 <= float(redundancy_fdr) <= 1):
+            raise ValueError(
+                f"redundancy_fdr must be in [0, 1], got {redundancy_fdr!r}"
+            )
 
         self.genesets = genesets
         self.n_bins = n_bins
@@ -95,7 +134,15 @@ class SingleCellPAGE:
         self.permutation_chunk_size = (
             None if permutation_chunk_size is None else int(permutation_chunk_size)
         )
+        self.score_chunk_size = (
+            None if score_chunk_size is None else int(score_chunk_size)
+        )
+        self.fast_mode = bool(fast_mode)
         self.n_jobs = n_jobs
+        self.filter_redundant = bool(filter_redundant)
+        self.redundancy_ratio = float(redundancy_ratio)
+        self.redundancy_scope = redundancy_scope
+        self.redundancy_fdr = float(redundancy_fdr)
         self.embeddings = {}
 
         if adata is not None:
@@ -177,12 +224,21 @@ class SingleCellPAGE:
             [gene_to_expr_idx[g] for g in self.shared_genes]
         )
 
-        # Subset gene sets
-        self.ont_bool = self.genesets.get_gene_subset(self.shared_genes)
+        # Subset gene sets and drop pathways with zero overlap to avoid
+        # degenerate scoring/permutation tests.
+        ont_full = self.genesets.get_gene_subset(self.shared_genes)
+        nonempty_mask = ont_full.sum(axis=1) > 0
+        if nonempty_mask.sum() == 0:
+            raise ValueError(
+                "No pathways have shared genes after intersecting expression and gene sets"
+            )
+        self.n_pathways_input = int(ont_full.shape[0])
+        self.n_pathways_dropped_zero_shared = int((~nonempty_mask).sum())
+        self.ont_bool = ont_full[nonempty_mask]
         self.membership_bins = self.genesets.get_membership_subset(
             self.shared_genes
         )
-        self.pathway_names = self.genesets.pathways.copy()
+        self.pathway_names = self.genesets.pathways.copy()[nonempty_mask]
         self.n_pathways = self.ont_bool.shape[0]
 
     def _set_jobs(self):
@@ -225,15 +281,43 @@ class SingleCellPAGE:
         exp_bins_i32 = exp_bins.astype(np.int32)
         ont_bool_i32 = self.ont_bool.astype(np.int32)
 
-        if self.function == 'mi':
-            return batch_mutual_information_2d(
-                exp_bins_i32, ont_bool_i32, x_bins, y_bins)
-        else:
+        n_pathways = ont_bool_i32.shape[0]
+        chunk_size = self.score_chunk_size or n_pathways
+        chunk_size = max(1, min(int(chunk_size), n_pathways))
+
+        if chunk_size >= n_pathways:
+            if self.function == 'mi':
+                return batch_mutual_information_2d(
+                    exp_bins_i32, ont_bool_i32, x_bins, y_bins)
             z_bins = int(self.membership_bins.max()) + 1
             return batch_conditional_mutual_information_2d(
                 exp_bins_i32, ont_bool_i32,
                 self.membership_bins.astype(np.int32),
                 x_bins, y_bins, z_bins)
+
+        scores = np.zeros((self.n_cells, n_pathways), dtype=np.float64)
+        membership_i32 = self.membership_bins.astype(np.int32)
+        z_bins = int(membership_i32.max()) + 1
+        chunk_starts = range(0, n_pathways, chunk_size)
+        chunk_bar = tqdm(
+            chunk_starts,
+            total=(n_pathways + chunk_size - 1) // chunk_size,
+            desc="scoring pathways (chunks)",
+            leave=False,
+        )
+        for start in chunk_bar:
+            end = min(start + chunk_size, n_pathways)
+            ont_chunk = ont_bool_i32[start:end]
+            if self.function == 'mi':
+                chunk_scores = batch_mutual_information_2d(
+                    exp_bins_i32, ont_chunk, x_bins, y_bins)
+            else:
+                chunk_scores = batch_conditional_mutual_information_2d(
+                    exp_bins_i32, ont_chunk, membership_i32,
+                    x_bins, y_bins, z_bins)
+            scores[:, start:end] = chunk_scores
+            chunk_bar.set_postfix_str(f"pathways {end}/{n_pathways}")
+        return scores
 
     def _compute_geary_c(self, scores):
         """Compute Geary's C' for each pathway.
@@ -257,7 +341,7 @@ class SingleCellPAGE:
             self.n_cells,
         )
 
-    def _permutation_test(self, n_permutations=1000):
+    def _permutation_test(self, n_permutations=1000, progress_callback=None, pathway_indices=None):
         """Permutation test for Geary's C using size-matched random gene sets.
 
         Generates random gene sets of matching sizes, computes their per-cell
@@ -273,7 +357,16 @@ class SingleCellPAGE:
         np.ndarray
             Shape (n_pathways,) p-values.
         """
-        pathway_sizes = self.ont_bool.sum(axis=1)
+        if pathway_indices is None:
+            pathway_indices = np.arange(self.n_pathways, dtype=np.int64)
+        else:
+            pathway_indices = np.asarray(pathway_indices, dtype=np.int64)
+        if pathway_indices.size == 0:
+            return np.full(self.n_pathways, np.nan)
+
+        ont_eval = self.ont_bool[pathway_indices]
+        consistency_eval = self.consistency[pathway_indices]
+        pathway_sizes = ont_eval.sum(axis=1)
         unique_sizes = np.unique(pathway_sizes)
 
         # Group pathways by size for efficiency
@@ -281,7 +374,7 @@ class SingleCellPAGE:
         for size in unique_sizes:
             size_to_pathways[int(size)] = np.where(pathway_sizes == size)[0]
 
-        pvalues = np.ones(self.n_pathways)
+        pvalues = np.full(self.n_pathways, np.nan)
         n_shared = len(self.shared_genes)
 
         # Pre-compute discretized expression (same as _score_pathways)
@@ -303,9 +396,16 @@ class SingleCellPAGE:
 
         # Keep random membership matrix chunks near ~256 MB by default.
         bytes_per_perm = max(n_shared * 4, 1)  # int32 matrix
-        auto_chunk = max(1, int((256 * 1024 * 1024) // bytes_per_perm))
+        auto_chunk = max(1, int((64 * 1024 * 1024) // bytes_per_perm))
+        auto_chunk = min(auto_chunk, 128)
         chunk_size = self.permutation_chunk_size or min(n_permutations, auto_chunk)
         chunk_size = max(1, min(int(chunk_size), n_permutations))
+        if progress_callback is not None:
+            progress_callback(
+                "Step 4/4: permutation testing "
+                f"({len(unique_sizes)} pathway-size groups, chunk_size={chunk_size}, "
+                f"tested_pathways={pathway_indices.size})"
+            )
 
         for size in tqdm(unique_sizes, desc="permutation testing (pathway sizes)"):
             size = int(size)
@@ -342,13 +442,14 @@ class SingleCellPAGE:
                     rand_scores, W_indices, W_indptr, W_data, self.n_cells)
 
                 for i, p_idx in enumerate(pw_idxs):
-                    observed = self.consistency[p_idx]
+                    observed = consistency_eval[p_idx]
                     exceed_counts[i] += np.sum(null_c_primes >= observed)
                 chunk_bar.set_postfix_str(f"perm {end}/{n_permutations}")
 
             # Final empirical p-values for pathways of this size
             for i, p_idx in enumerate(pw_idxs):
-                pvalues[p_idx] = (exceed_counts[i] + 1) / (n_permutations + 1)
+                global_idx = int(pathway_indices[p_idx])
+                pvalues[global_idx] = (exceed_counts[i] + 1) / (n_permutations + 1)
 
         return pvalues
 
@@ -382,17 +483,19 @@ class SingleCellPAGE:
         self.consistency = self._compute_geary_c(self.scores)
         self.pvalues = np.full(len(pathway_indices), np.nan)
         self.fdr = np.full(len(pathway_indices), np.nan)
-
-        self.results = pd.DataFrame({
+        self._killed_log = []
+        self.full_results = pd.DataFrame({
             'pathway': [self.pathway_names[i] for i in pathway_indices],
             'consistency': self.consistency,
             'p-value': self.pvalues,
             'FDR': self.fdr,
+            'redundant': np.zeros(len(pathway_indices), dtype=bool),
         }).sort_values('consistency', ascending=False).reset_index(drop=True)
+        self.results = self.full_results.drop(columns=['redundant']).copy()
 
         return self.results
 
-    def run(self, n_permutations=1000):
+    def run(self, n_permutations=1000, progress_callback=None):
         """Run the single-cell PAGE analysis.
 
         Computes MI/CMI per cell, tests spatial coherence via Geary's C,
@@ -408,34 +511,188 @@ class SingleCellPAGE:
         pd.DataFrame
             Results with columns: pathway, consistency, p-value, FDR.
         """
+        def _emit(message):
+            if progress_callback is not None:
+                progress_callback(message)
+            else:
+                tqdm.write(message)
+
+        t0 = time.perf_counter()
         pipeline_bar = tqdm(total=4, desc="single-cell pipeline", leave=True)
-        self._set_jobs()
-        self._build_knn_graph()
-        pipeline_bar.update(1)
-        pipeline_bar.set_postfix_str("knn graph ready")
+        try:
+            self._set_jobs()
 
-        self.scores = self._score_pathways()
-        pipeline_bar.update(1)
-        pipeline_bar.set_postfix_str("pathway scores ready")
+            _emit("Step 1/4: building KNN graph")
+            t_step = time.perf_counter()
+            self._build_knn_graph()
+            pipeline_bar.update(1)
+            pipeline_bar.set_postfix_str("knn graph ready")
+            _emit(f"Step 1/4 complete in {time.perf_counter() - t_step:.1f}s")
 
-        self.consistency = self._compute_geary_c(self.scores)
-        pipeline_bar.update(1)
-        pipeline_bar.set_postfix_str("geary c ready")
+            _emit(
+                "Step 2/4: scoring pathways "
+                f"({self.n_cells} cells x {self.n_pathways} pathways, "
+                f"score_chunk_size={self.score_chunk_size or self.n_pathways})"
+            )
+            t_step = time.perf_counter()
+            self.scores = self._score_pathways()
+            pipeline_bar.update(1)
+            pipeline_bar.set_postfix_str("pathway scores ready")
+            _emit(f"Step 2/4 complete in {time.perf_counter() - t_step:.1f}s")
 
-        self.pvalues = self._permutation_test(n_permutations=n_permutations)
-        self.fdr = benjamini_hochberg(self.pvalues)
-        pipeline_bar.update(1)
-        pipeline_bar.set_postfix_str("permutation test ready")
-        pipeline_bar.close()
+            _emit("Step 3/4: computing Geary's C")
+            t_step = time.perf_counter()
+            self.consistency = self._compute_geary_c(self.scores)
+            pipeline_bar.update(1)
+            pipeline_bar.set_postfix_str("geary c ready")
+            _emit(f"Step 3/4 complete in {time.perf_counter() - t_step:.1f}s")
 
-        self.results = pd.DataFrame({
+            pre_redundant_mask = np.zeros(self.n_pathways, dtype=bool)
+            perm_pathway_indices = None
+            if self.fast_mode and self.filter_redundant:
+                if self.redundancy_scope != 'all':
+                    _emit(
+                        "Fast mode note: applying redundancy on all pathways "
+                        "after Geary's C (ignoring redundancy_scope='fdr')"
+                    )
+                _emit("Fast mode: pre-filtering redundant pathways before permutations")
+                pre_redundant_mask = self._consolidate_pathways(
+                    candidate_mask=np.ones(self.n_pathways, dtype=bool),
+                    consistency_values=self.consistency,
+                )
+                perm_pathway_indices = np.where(~pre_redundant_mask)[0]
+                _emit(
+                    f"Fast mode: kept {perm_pathway_indices.size}/{self.n_pathways} "
+                    "pathways for permutation testing"
+                )
+
+            t_step = time.perf_counter()
+            self.pvalues = self._permutation_test(
+                n_permutations=n_permutations,
+                progress_callback=progress_callback,
+                pathway_indices=perm_pathway_indices,
+            )
+            self.fdr = np.full(self.n_pathways, np.nan)
+            tested_mask = np.isfinite(self.pvalues)
+            if tested_mask.any():
+                self.fdr[tested_mask] = benjamini_hochberg(self.pvalues[tested_mask])
+            pipeline_bar.update(1)
+            pipeline_bar.set_postfix_str("permutation test ready")
+            _emit(f"Step 4/4 complete in {time.perf_counter() - t_step:.1f}s")
+        except KeyboardInterrupt:
+            _emit("Interrupted by user")
+            raise
+        finally:
+            pipeline_bar.close()
+
+        if self.filter_redundant:
+            if self.fast_mode:
+                redundant_mask = pre_redundant_mask
+            else:
+                redundant_mask = self._consolidate_pathways()
+        else:
+            redundant_mask = np.zeros(self.n_pathways, dtype=bool)
+            self._killed_log = []
+
+        self.full_results = pd.DataFrame({
             'pathway': self.pathway_names,
             'consistency': self.consistency,
             'p-value': self.pvalues,
             'FDR': self.fdr,
+            'redundant': redundant_mask,
         }).sort_values('consistency', ascending=False).reset_index(drop=True)
+        if self.filter_redundant:
+            self.results = self.full_results[
+                ~self.full_results['redundant']
+            ].drop(columns=['redundant']).reset_index(drop=True)
+        else:
+            self.results = self.full_results.drop(
+                columns=['redundant']
+            ).reset_index(drop=True)
 
+        _emit(f"Single-cell analysis complete in {time.perf_counter() - t0:.1f}s")
         return self.results
+
+    def _redundancy_candidates(self):
+        """Return boolean mask of pathways considered for redundancy checks."""
+        if self.redundancy_scope == 'all':
+            return np.ones(self.n_pathways, dtype=bool)
+        return np.isfinite(self.fdr) & (self.fdr <= self.redundancy_fdr)
+
+    def _redundancy_expression_bins(self):
+        """Build deterministic pseudo-bulk expression bins for redundancy."""
+        expr_subset = self.expression_matrix[:, self._expr_idxs]
+        mean_expr = np.asarray(expr_subset.mean(axis=0)).reshape(-1)
+        if mean_expr.size == 0:
+            return np.zeros(0, dtype=np.int32), 1
+        if self.n_bins <= 1:
+            return np.zeros(mean_expr.size, dtype=np.int32), 1
+
+        q = np.quantile(mean_expr, np.linspace(0, 1, self.n_bins + 1))
+        inner_edges = q[1:-1]
+        if inner_edges.size == 0:
+            return np.zeros(mean_expr.size, dtype=np.int32), 1
+        exp_bins = np.digitize(mean_expr, inner_edges, right=False).astype(np.int32)
+        return exp_bins, int(exp_bins.max()) + 1
+
+    def _consolidate_pathways(self, candidate_mask=None, consistency_values=None):
+        """Consolidate redundant pathways and track rejection provenance."""
+        if candidate_mask is None:
+            candidate_mask = self._redundancy_candidates()
+        if consistency_values is None:
+            consistency_values = self.consistency
+        redundant_mask = np.zeros(self.n_pathways, dtype=bool)
+        self._killed_log = []
+
+        if candidate_mask.sum() <= 1:
+            return redundant_mask
+
+        exp_bins, x_bins = self._redundancy_expression_bins()
+        y_bins = int(self.ont_bool.max()) + 1
+        ont_i32 = self.ont_bool.astype(np.int32)
+        accepted = []
+
+        for idx in np.argsort(consistency_values)[::-1]:
+            idx = int(idx)
+            if not candidate_mask[idx]:
+                continue
+            if len(accepted) == 0:
+                accepted.append(idx)
+                continue
+
+            all_ri = np.zeros(len(accepted), dtype=np.float64)
+            for i, accepted_idx in enumerate(accepted):
+                all_ri[i] = measure_redundancy(
+                    exp_bins,
+                    ont_i32[idx],
+                    ont_i32[accepted_idx],
+                    x_bins,
+                    y_bins,
+                    y_bins,
+                )
+
+            if np.all(all_ri > self.redundancy_ratio):
+                accepted.append(idx)
+            else:
+                redundant_mask[idx] = True
+                min_i = int(np.argmin(all_ri))
+                killer_idx = accepted[min_i]
+                self._killed_log.append((
+                    self.pathway_names[idx],
+                    self.pathway_names[killer_idx],
+                    float(all_ri[min_i]),
+                ))
+
+        return redundant_mask
+
+    def get_redundancy_log(self) -> pd.DataFrame:
+        """Return rejected pathways with their killer pathway and min ratio."""
+        if not hasattr(self, '_killed_log'):
+            return pd.DataFrame(columns=['rejected_pathway', 'killed_by', 'min_ratio'])
+        return pd.DataFrame(
+            self._killed_log,
+            columns=['rejected_pathway', 'killed_by', 'min_ratio'],
+        )
 
     def run_neighborhoods(self, labels=None, n_pools=None):
         """Run standard PAGE on aggregated neighborhoods.
@@ -624,7 +881,9 @@ class SingleCellPAGE:
             f"  n_pathways={self.n_pathways},\n"
             f"  n_neighbors={self.n_neighbors},\n"
             f"  bin_axis='{self.bin_axis}',\n"
-            f"  function='{self.function}'\n"
+            f"  function='{self.function}',\n"
+            f"  filter_redundant={self.filter_redundant},\n"
+            f"  redundancy_scope='{self.redundancy_scope}'\n"
             f")"
         )
 

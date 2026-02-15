@@ -58,6 +58,7 @@ class ExpressionProfile:
         """
         self._is_bin = is_bin
         self.bin_edges = None
+        self.bin_labels = None
         self._validate_inputs(genes, expression)
         self._process_input(genes, expression)
         self.n_bins = n_bins
@@ -77,7 +78,15 @@ class ExpressionProfile:
         self.genes = np.array(x)
         self.n_genes = self.genes.size
         self.raw_expression = np.array(y)
-        notnan_mask = ~ np.isnan(self.raw_expression)
+        try:
+            notnan_mask = ~np.isnan(self.raw_expression)
+        except TypeError:
+            # Handle non-numeric discrete labels.
+            expr_obj = np.asarray(self.raw_expression, dtype=object)
+            notnan_mask = np.array(
+                [(v is not None) and (v == v) for v in expr_obj.ravel()],
+                dtype=bool,
+            ).reshape(expr_obj.shape)
         if len(self.raw_expression.shape) == 2:
             notnan_mask = notnan_mask.any(0)
             self.genes = self.genes[notnan_mask]
@@ -85,6 +94,37 @@ class ExpressionProfile:
         else:
             self.genes = self.genes[notnan_mask]
             self.raw_expression = self.raw_expression[notnan_mask]
+
+    @staticmethod
+    def _format_bin_label(v):
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            return str(v)
+        return str(int(fv)) if float(fv).is_integer() else str(fv)
+
+    def _encode_discrete_bins(self, values: np.ndarray) -> np.ndarray:
+        arr = np.asarray(values)
+        flat = arr.ravel()
+        try:
+            vals = flat.astype(np.int64)
+            uniq = np.unique(vals)
+            if uniq.size > 0 and uniq[0] == 0 and np.array_equal(uniq, np.arange(uniq[-1] + 1)):
+                labels = uniq
+                encoded = vals
+            else:
+                labels = np.sort(uniq)
+                encoded = np.searchsorted(labels, vals)
+            self.bin_labels = np.array([self._format_bin_label(v) for v in labels], dtype=object)
+            self.n_bins = int(len(labels))
+            return encoded.reshape(arr.shape).astype(np.int32)
+        except (TypeError, ValueError):
+            text = flat.astype(str)
+            labels = np.unique(text)
+            encoded = np.searchsorted(labels, text)
+            self.bin_labels = labels.astype(object)
+            self.n_bins = int(len(labels))
+            return encoded.reshape(arr.shape).astype(np.int32)
 
     def _validate_inputs(
             self,
@@ -153,13 +193,13 @@ class ExpressionProfile:
         if len(self.raw_expression.shape) == 1:
             sub_expression = self.raw_expression[idxs]
             if self._is_bin:
-                bin_array = sub_expression.astype(np.int32)
+                bin_array = self._encode_discrete_bins(sub_expression)
             else:
                 bin_array = self._discretize(sub_expression, self.n_bins)
         else:
             sub_expression = self.raw_expression[:, idxs]
             if self._is_bin:
-                bin_array = sub_expression.astype(np.int32)
+                bin_array = self._encode_discrete_bins(sub_expression)
             else:
                 bin_array = np.apply_along_axis(lambda x: self._discretize(x, self.n_bins), 0, sub_expression)
 

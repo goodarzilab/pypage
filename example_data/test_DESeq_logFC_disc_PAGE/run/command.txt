@@ -1,0 +1,8 @@
+# Generated: 2026-02-15T11:15:41
+# CWD: /Users/hani/pypage
+
+Run command:
+-e example_data/test_DESeq_logFC.txt --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt --type discrete --cols GENE,log2FoldChange_bin9 --seed 42 --outdir example_data/test_DESeq_logFC_disc_PAGE
+
+Draw-only command:
+pypage --draw-only --outdir example_data/test_DESeq_logFC_disc_PAGE --cmap ipage --cmap-reg plasma --max-rows 50 --min-val -5.0 --max-val 5.0 --bar-min auto --bar-max auto --title '' --no-show-reg --expression example_data/test_DESeq_logFC.txt --cols GENE,log2FoldChange_bin9

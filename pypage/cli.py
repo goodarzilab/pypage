@@ -6,8 +6,11 @@ Usage::
 """
 
 import argparse
+import json
 import os
+import shlex
 import sys
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -100,14 +103,143 @@ def _setup_outdir(args, source_path):
 
     os.makedirs(outdir, exist_ok=True)
 
+    run_dir = os.path.join(outdir, "run")
+    tables_dir = os.path.join(outdir, "tables")
+    plots_dir = os.path.join(outdir, "plots")
+    os.makedirs(run_dir, exist_ok=True)
+    os.makedirs(tables_dir, exist_ok=True)
+    os.makedirs(plots_dir, exist_ok=True)
+
     if args.output is None:
-        args.output = os.path.join(outdir, "results.tsv")
+        args.output = os.path.join(tables_dir, "results.tsv")
     if args.heatmap is None:
-        args.heatmap = os.path.join(outdir, "heatmap.pdf")
+        args.heatmap = os.path.join(plots_dir, "heatmap.pdf")
     if args.html is None:
         args.html = os.path.join(outdir, "heatmap.html")
     if args.killed is None:
-        args.killed = os.path.join(outdir, "results.killed.tsv")
+        args.killed = os.path.join(tables_dir, "results.killed.tsv")
+
+    return outdir, run_dir, tables_dir, plots_dir
+
+
+def _shell_join(argv):
+    return " ".join(shlex.quote(str(x)) for x in argv)
+
+
+def _float_or_auto(value):
+    if isinstance(value, str) and value.lower() == "auto":
+        return None
+    return float(value)
+
+
+def _write_run_metadata(run_dir, argv, draw_only_cmd):
+    os.makedirs(run_dir, exist_ok=True)
+    now = datetime.now().isoformat(timespec="seconds")
+    with open(os.path.join(run_dir, "command.txt"), "w") as f:
+        f.write(f"# Generated: {now}\n")
+        f.write(f"# CWD: {os.getcwd()}\n")
+        f.write("\nRun command:\n")
+        f.write(_shell_join(argv) + "\n")
+        f.write("\nDraw-only command:\n")
+        f.write(draw_only_cmd + "\n")
+
+
+def _build_draw_only_command(args, outdir):
+    min_val = args.min_val if args.min_val is not None else -float(args.max_val)
+    bar_min = args.bar_min if args.bar_min is not None else "auto"
+    bar_max = args.bar_max if args.bar_max is not None else "auto"
+    cmd = [
+        "pypage",
+        "--draw-only",
+        "--outdir",
+        outdir,
+        "--cmap",
+        args.cmap,
+        "--cmap-reg",
+        args.cmap_reg,
+        "--max-rows",
+        args.max_rows,
+        "--min-val",
+        min_val,
+        "--max-val",
+        args.max_val,
+        "--bar-min",
+        bar_min,
+        "--bar-max",
+        bar_max,
+        "--title",
+        args.title,
+    ]
+    cmd.append("--show-reg" if args.show_reg else "--no-show-reg")
+    if args.expression is not None:
+        cmd.extend(["--expression", args.expression])
+    if args.cols is not None:
+        cmd.extend(["--cols", args.cols])
+    if args.no_header:
+        cmd.append("--no-header")
+    return _shell_join(cmd)
+
+
+def _write_run_status(run_dir, status, error=None):
+    payload = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "status": status,
+    }
+    if error is not None:
+        payload["error"] = str(error)
+    with open(os.path.join(run_dir, "status.json"), "w") as f:
+        json.dump(payload, f, indent=2)
+
+
+def _resolve_draw_matrix_path(args, draw_outdir):
+    if args.matrix is not None:
+        return args.matrix
+    return os.path.join(draw_outdir, "tables", "results.matrix.tsv")
+
+
+def _resolve_draw_outdir(args):
+    if args.outdir is not None:
+        return args.outdir
+    if args.expression is not None:
+        return _stem(args.expression) + "_PAGE"
+    if args.matrix is not None:
+        return _stem(args.matrix) + "_PAGE"
+    return None
+
+
+def _run_draw_from_matrix(args, draw_outdir, argv_used):
+    os.makedirs(draw_outdir, exist_ok=True)
+    run_dir = os.path.join(draw_outdir, "run")
+    draw_only_cmd = _build_draw_only_command(args, draw_outdir)
+    _write_run_metadata(run_dir, argv_used, draw_only_cmd)
+    if args.heatmap is None:
+        args.heatmap = os.path.join(draw_outdir, "plots", "heatmap.pdf")
+    if args.html is None:
+        args.html = os.path.join(draw_outdir, "heatmap.html")
+    os.makedirs(os.path.dirname(args.heatmap), exist_ok=True)
+    _write_run_status(run_dir, "running")
+    try:
+        heatmap = Heatmap.from_matrix(args.matrix)
+        heatmap.cmap_main = args.cmap
+        heatmap.cmap_reg = args.cmap_reg
+
+        # Optionally load expression for regulator overlay
+        if args.expression and args.show_reg:
+            exp = _load_expression(args.expression, args.cols, args.no_header)
+            heatmap.add_gene_expression(exp.genes, exp.raw_expression)
+
+        heatmap.save(args.heatmap, max_rows=args.max_rows,
+                     show_reg=args.show_reg, max_val=args.max_val,
+                     min_val=args.min_val, title=args.title,
+                     bar_min=args.bar_min, bar_max=args.bar_max)
+        heatmap.to_html(args.html, max_rows=args.max_rows,
+                        show_reg=args.show_reg, max_val=args.max_val,
+                        min_val=args.min_val, title=args.title,
+                        bar_min=args.bar_min, bar_max=args.bar_max)
+    except Exception as exc:
+        _write_run_status(run_dir, "failed", error=exc)
+        raise
+    _write_run_status(run_dir, "completed")
 
 
 def _build_parser():
@@ -203,11 +335,11 @@ def _build_parser():
     )
     parser.add_argument(
         "-o", "--output", default=None,
-        help="Output TSV path (default: outdir/results.tsv)",
+        help="Output TSV path (default: outdir/tables/results.tsv)",
     )
     parser.add_argument(
         "--heatmap", default=None,
-        help="Save heatmap image to path (PNG/PDF/SVG)",
+        help="Save heatmap image to path (default: outdir/plots/heatmap.pdf)",
     )
     parser.add_argument(
         "--manual", default=None,
@@ -215,7 +347,7 @@ def _build_parser():
     )
     parser.add_argument(
         "--killed", default=None,
-        help="Save redundancy log to path (TSV)",
+        help="Save redundancy log to path (default: outdir/tables/results.killed.tsv)",
     )
     parser.add_argument(
         "--seed", type=int, default=None,
@@ -225,7 +357,7 @@ def _build_parser():
     # -- Visualization options ------------------------------------------------
     parser.add_argument(
         "--html", default=None,
-        help="Save heatmap as standalone HTML file",
+        help="Save heatmap as standalone HTML file (default: outdir/heatmap.html)",
     )
     parser.add_argument(
         "--cmap", default="ipage",
@@ -248,20 +380,25 @@ def _build_parser():
         help="Color scale upper cap (default: 5)",
     )
     parser.add_argument(
-        "--bar-min", type=float, default=None,
+        "--bar-min", type=_float_or_auto, default=None,
         help="Global minimum for bin-edge bar normalization (default: auto)",
     )
     parser.add_argument(
-        "--bar-max", type=float, default=None,
+        "--bar-max", type=_float_or_auto, default=None,
         help="Global maximum for bin-edge bar normalization (default: auto)",
     )
     parser.add_argument(
         "--title", default="",
         help="Plot title",
     )
-    parser.add_argument(
-        "--show-reg", action="store_true", default=False,
+    show_reg_group = parser.add_mutually_exclusive_group(required=False)
+    show_reg_group.add_argument(
+        "--show-reg", action="store_true", dest="show_reg", default=False,
         help="Show regulator expression column",
+    )
+    show_reg_group.add_argument(
+        "--no-show-reg", action="store_false", dest="show_reg",
+        help="Hide regulator expression column (default)",
     )
 
     # -- Draw-only mode -------------------------------------------------------
@@ -270,8 +407,12 @@ def _build_parser():
         help="Skip analysis, load saved matrix for visualization only",
     )
     parser.add_argument(
+        "--resume", action="store_true", default=False,
+        help="Skip analysis and regenerate visualization outputs from outdir/tables/results.matrix.tsv",
+    )
+    parser.add_argument(
         "--matrix", default=None,
-        help="Path to .matrix.tsv (required with --draw-only)",
+        help="Path to matrix TSV (default in draw/resume mode: outdir/tables/results.matrix.tsv)",
     )
 
     return parser
@@ -280,20 +421,17 @@ def _build_parser():
 def main(argv=None):
     parser = _build_parser()
     args = parser.parse_args(argv)
+    argv_used = list(sys.argv[1:] if argv is None else argv)
 
     # -- Validate conditional requirements ------------------------------------
     if args.draw_only:
-        if args.matrix is None and args.expression is None:
-            parser.error("--matrix or -e/--expression is required when using --draw-only")
-        # Derive matrix and outdir from -e when --matrix not given
-        if args.matrix is None:
-            outdir = args.outdir if args.outdir is not None else _stem(args.expression) + "_PAGE"
-            args.matrix = os.path.join(outdir, "results.matrix.tsv")
-    else:
+        if args.matrix is None and args.expression is None and args.outdir is None:
+            parser.error("--outdir, --matrix, or -e/--expression is required when using --draw-only")
+    elif not args.resume:
         if args.expression is None:
-            parser.error("-e/--expression is required when not using --draw-only")
+            parser.error("-e/--expression is required when not using --draw-only/--resume")
         if args.genesets is None and args.genesets_long is None and args.gmt is None:
-            parser.error("one of -g/--genesets, --genesets-long, --gmt is required when not using --draw-only")
+            parser.error("one of -g/--genesets, --genesets-long, --gmt is required when not using --draw-only/--resume")
 
     # -- Seed -----------------------------------------------------------------
     if args.seed is not None:
@@ -301,115 +439,120 @@ def main(argv=None):
 
     # -- Draw-only mode -------------------------------------------------------
     if args.draw_only:
-        # Determine outdir: explicit --outdir > derive from -e > derive from --matrix
-        if args.outdir is not None:
-            draw_outdir = args.outdir
-        elif args.expression is not None:
-            draw_outdir = _stem(args.expression) + "_PAGE"
-        else:
-            draw_outdir = _stem(args.matrix) + "_PAGE"
-        os.makedirs(draw_outdir, exist_ok=True)
-        if args.heatmap is None:
-            args.heatmap = os.path.join(draw_outdir, "heatmap.pdf")
-        if args.html is None:
-            args.html = os.path.join(draw_outdir, "heatmap.html")
-
-        heatmap = Heatmap.from_matrix(args.matrix)
-        heatmap.cmap_main = args.cmap
-        heatmap.cmap_reg = args.cmap_reg
-
-        # Optionally load expression for regulator overlay
-        if args.expression and args.show_reg:
-            exp = _load_expression(args.expression, args.cols, args.no_header)
-            heatmap.add_gene_expression(exp.genes, exp.raw_expression)
-
-        heatmap.save(args.heatmap, max_rows=args.max_rows,
-                     show_reg=args.show_reg, max_val=args.max_val,
-                     min_val=args.min_val, title=args.title,
-                     bar_min=args.bar_min, bar_max=args.bar_max)
-        heatmap.to_html(args.html, max_rows=args.max_rows,
-                        show_reg=args.show_reg, max_val=args.max_val,
-                        min_val=args.min_val, title=args.title,
-                        bar_min=args.bar_min, bar_max=args.bar_max)
+        draw_outdir = _resolve_draw_outdir(args)
+        args.matrix = _resolve_draw_matrix_path(args, draw_outdir)
+        if not os.path.exists(args.matrix):
+            run_dir = os.path.join(draw_outdir, "run")
+            draw_only_cmd = _build_draw_only_command(args, draw_outdir)
+            _write_run_metadata(run_dir, argv_used, draw_only_cmd)
+            _write_run_status(run_dir, "failed", error=f"matrix not found: {args.matrix}")
+            parser.error(f"Matrix file not found for draw mode: {args.matrix}")
+        _run_draw_from_matrix(args, draw_outdir, argv_used)
         return
 
+    # -- Resume mode ----------------------------------------------------------
+    if args.resume:
+        draw_outdir = _resolve_draw_outdir(args)
+        if draw_outdir is not None:
+            args.matrix = _resolve_draw_matrix_path(args, draw_outdir)
+            if os.path.exists(args.matrix):
+                _run_draw_from_matrix(args, draw_outdir, argv_used)
+                return
+            print(
+                f"Resume requested but matrix not found at {args.matrix}; falling back to full run",
+                file=sys.stderr,
+            )
+
+    if args.expression is None:
+        parser.error("-e/--expression is required for full run when --resume fallback is used")
+    if args.genesets is None and args.genesets_long is None and args.gmt is None:
+        parser.error("one of -g/--genesets, --genesets-long, --gmt is required for full run when --resume fallback is used")
+
     # -- Set up output directory ----------------------------------------------
-    _setup_outdir(args, args.expression)
+    outdir, run_dir, _, _ = _setup_outdir(args, args.expression)
+    draw_only_cmd = _build_draw_only_command(args, outdir)
+    _write_run_metadata(run_dir, argv_used, draw_only_cmd)
+    _write_run_status(run_dir, "running")
 
-    # -- Load expression ------------------------------------------------------
-    expression_mode = _resolve_expression_input_mode(args, parser)
-    exp = _load_expression(
-        args.expression, args.cols, args.no_header,
-        is_bin=(expression_mode == "discrete"), n_bins=args.n_bins,
-    )
-
-    # -- Load gene sets -------------------------------------------------------
-    if args.genesets is not None:
-        gs = GeneSets(ann_file=args.genesets)
-    elif args.genesets_long is not None:
-        ann = pd.read_csv(
-            args.genesets_long, sep="\t", header=None,
-            names=["gene", "pathway"],
+    try:
+        # -- Load expression --------------------------------------------------
+        expression_mode = _resolve_expression_input_mode(args, parser)
+        exp = _load_expression(
+            args.expression, args.cols, args.no_header,
+            is_bin=(expression_mode == "discrete"), n_bins=args.n_bins,
         )
-        gs = GeneSets(ann["gene"], ann["pathway"])
-    else:
-        gs = GeneSets.from_gmt(args.gmt)
 
-    # -- Run PAGE -------------------------------------------------------------
-    p = PAGE(
-        exp, gs,
-        function=args.function,
-        n_shuffle=args.n_shuffle,
-        alpha=args.alpha,
-        k=args.k,
-        filter_redundant=args.filter_redundant,
-        redundancy_ratio=args.redundancy_ratio,
-        n_jobs=args.n_jobs,
-    )
-
-    if args.manual is not None:
-        pathway_names = _parse_manual(args.manual)
-        results, heatmap = p.run_manual(pathway_names)
-    else:
-        results, heatmap = p.run()
-
-    # -- Write results --------------------------------------------------------
-    output_results = results.copy()
-    output_results['p-value'] = output_results['p-value'].map(
-        lambda x: f'{x:.4e}' if not np.isnan(x) else 'NaN')
-    output_results.to_csv(args.output, sep="\t", index=False)
-    print(f"Results saved to {args.output}", file=sys.stderr)
-
-    # Auto-save companion matrix
-    if heatmap is not None:
-        if '.' in args.output:
-            matrix_path = args.output.rsplit('.', 1)[0] + '.matrix.tsv'
+        # -- Load gene sets ---------------------------------------------------
+        if args.genesets is not None:
+            gs = GeneSets(ann_file=args.genesets)
+        elif args.genesets_long is not None:
+            ann = pd.read_csv(
+                args.genesets_long, sep="\t", header=None,
+                names=["gene", "pathway"],
+            )
+            gs = GeneSets(ann["gene"], ann["pathway"])
         else:
-            matrix_path = args.output + '.matrix.tsv'
-        heatmap.save_matrix(matrix_path)
-        print(f"Enrichment matrix saved to {matrix_path}", file=sys.stderr)
+            gs = GeneSets.from_gmt(args.gmt)
 
-    # -- Apply viz params and save heatmap ------------------------------------
-    if heatmap is not None:
-        heatmap.cmap_main = args.cmap
-        heatmap.cmap_reg = args.cmap_reg
+        # -- Run PAGE ---------------------------------------------------------
+        p = PAGE(
+            exp, gs,
+            function=args.function,
+            n_shuffle=args.n_shuffle,
+            alpha=args.alpha,
+            k=args.k,
+            filter_redundant=args.filter_redundant,
+            redundancy_ratio=args.redundancy_ratio,
+            n_jobs=args.n_jobs,
+        )
 
-        heatmap.save(args.heatmap, max_rows=args.max_rows,
-                     show_reg=args.show_reg, max_val=args.max_val,
-                     min_val=args.min_val, title=args.title,
-                     bar_min=args.bar_min, bar_max=args.bar_max)
-        print(f"Heatmap saved to {args.heatmap}", file=sys.stderr)
+        if args.manual is not None:
+            pathway_names = _parse_manual(args.manual)
+            results, heatmap = p.run_manual(pathway_names)
+        else:
+            results, heatmap = p.run()
 
-        heatmap.to_html(args.html, max_rows=args.max_rows,
-                        show_reg=args.show_reg, max_val=args.max_val,
-                        min_val=args.min_val, title=args.title,
-                        bar_min=args.bar_min, bar_max=args.bar_max)
-        print(f"HTML heatmap saved to {args.html}", file=sys.stderr)
+        # -- Write results ----------------------------------------------------
+        output_results = results.copy()
+        output_results['p-value'] = output_results['p-value'].map(
+            lambda x: f'{x:.4e}' if not np.isnan(x) else 'NaN')
+        output_results.to_csv(args.output, sep="\t", index=False)
+        print(f"Results saved to {args.output}", file=sys.stderr)
 
-    # -- Redundancy log -------------------------------------------------------
-    killed_df = p.get_redundancy_log()
-    killed_df.to_csv(args.killed, sep="\t", index=False)
-    print(f"Redundancy log saved to {args.killed}", file=sys.stderr)
+        # Auto-save companion matrix
+        if heatmap is not None:
+            if '.' in args.output:
+                matrix_path = args.output.rsplit('.', 1)[0] + '.matrix.tsv'
+            else:
+                matrix_path = args.output + '.matrix.tsv'
+            heatmap.save_matrix(matrix_path)
+            print(f"Enrichment matrix saved to {matrix_path}", file=sys.stderr)
+
+        # -- Apply viz params and save heatmap --------------------------------
+        if heatmap is not None:
+            heatmap.cmap_main = args.cmap
+            heatmap.cmap_reg = args.cmap_reg
+
+            heatmap.save(args.heatmap, max_rows=args.max_rows,
+                         show_reg=args.show_reg, max_val=args.max_val,
+                         min_val=args.min_val, title=args.title,
+                         bar_min=args.bar_min, bar_max=args.bar_max)
+            print(f"Heatmap saved to {args.heatmap}", file=sys.stderr)
+
+            heatmap.to_html(args.html, max_rows=args.max_rows,
+                            show_reg=args.show_reg, max_val=args.max_val,
+                            min_val=args.min_val, title=args.title,
+                            bar_min=args.bar_min, bar_max=args.bar_max)
+            print(f"HTML heatmap saved to {args.html}", file=sys.stderr)
+
+        # -- Redundancy log ---------------------------------------------------
+        killed_df = p.get_redundancy_log()
+        killed_df.to_csv(args.killed, sep="\t", index=False)
+        print(f"Redundancy log saved to {args.killed}", file=sys.stderr)
+    except Exception as exc:
+        _write_run_status(run_dir, "failed", error=exc)
+        raise
+    _write_run_status(run_dir, "completed")
 
 
 if __name__ == "__main__":
