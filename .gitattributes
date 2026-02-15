@@ -1,4 +1,4 @@
 *.h5ad filter=lfs diff=lfs merge=lfs -text
 example_data/hg38_cistrome_index.txt filter=lfs diff=lfs merge=lfs -text
 example_data/simulated_df.csv filter=lfs diff=lfs merge=lfs -text
-example_data/CRC_scPAGE/report.html filter=lfs diff=lfs merge=lfs -text
+example_data/CRC_scPAGE/sc_report.html filter=lfs diff=lfs merge=lfs -text

@@ -1,0 +1,8 @@
+# Generated: 2026-02-15T10:51:38
+# CWD: /Users/hani/pypage
+
+Run command:
+/Users/hani/miniforge3/bin/pypage-sc --adata example_data/CRC.h5ad --gene-column gene --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt --groupby PhenoGraph_clusters --n-jobs 0 --fast-mode
+
+Draw-only command:
+pypage-sc --draw-only --outdir example_data/CRC_scPAGE --top-n 30 --fdr-threshold 0.05 --umap-top-n 10 --groupby PhenoGraph_clusters --gene-column gene

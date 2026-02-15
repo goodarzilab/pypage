@@ -139,7 +139,6 @@ docs/generated/**
 # Large test data / generated outputs
 tests/CRC.h5ad
 tests/CRC_scPAGE/
-example_data/CRC_scPAGE/
 
 # Notebook-generated data
 notebooks/CRC.h5ad

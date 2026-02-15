@@ -1,0 +1,40 @@
+{
+  "generated_at": "2026-02-15T10:51:38",
+  "status": "completed",
+  "signature": {
+    "inputs": {
+      "adata": {
+        "path": "example_data/CRC.h5ad",
+        "exists": true,
+        "size": 1128285513,
+        "mtime": 1771166169.8352754
+      },
+      "expression": null,
+      "genes": null,
+      "genesets": {
+        "path": "example_data/c2.all.v2026.1.Hs.symbols.gmt",
+        "exists": true,
+        "size": 4634828,
+        "mtime": 1771163545.728801
+      }
+    },
+    "params": {
+      "gene_column": "gene",
+      "function": "cmi",
+      "n_bins": 10,
+      "bin_axis": "cell",
+      "n_neighbors": null,
+      "n_permutations": 1000,
+      "perm_chunk_size": null,
+      "score_chunk_size": 256,
+      "fast_mode": true,
+      "n_jobs": 0,
+      "filter_redundant": true,
+      "redundancy_ratio": 5.0,
+      "redundancy_scope": "fdr",
+      "redundancy_fdr": 0.05,
+      "manual": null,
+      "seed": null
+    }
+  }
+}

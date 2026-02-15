@@ -1,0 +1,61 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'>
+<title>pyPAGE-SC Consistency Ranking</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; }
+h1 { font-size: 1.3em; }
+table { border-collapse: collapse; width: auto; }
+td, th { padding: 4px 8px; text-align: left; font-size: 12px; border: 1px solid #ddd; }
+th { background: #f5f5f5; }
+.bar-cell { width: 300px; position: relative; }
+.bar { height: 18px; display: inline-block; border-radius: 2px; }
+.bar-sig { background: #2166ac; }
+.bar-ns { background: #d6604d; }
+#tooltip { position: fixed; background: #333; color: #fff; padding: 6px 10px;
+  border-radius: 4px; font-size: 11px; pointer-events: none; display: none; z-index: 999; }
+.legend { margin-top: 14px; font-size: 12px; }
+.legend-box { display: inline-block; width: 18px; height: 12px; margin-right: 4px; vertical-align: middle; border: 1px solid #aaa; }
+</style></head><body>
+<div id="tooltip"></div>
+<script>
+var tip = document.getElementById('tooltip');
+function showTip(e, text) { tip.style.display='block'; tip.innerHTML=text;
+  tip.style.left=(e.clientX+12)+'px'; tip.style.top=(e.clientY+12)+'px'; }
+function hideTip() { tip.style.display='none'; }
+</script>
+<table><tr><th>Pathway</th><th>Consistency</th><th>FDR</th></tr>
+<tr><td>REACTOME_EUKARYOTIC_TRANSLATION_INITIATION</td><td class="bar-cell" onmousemove="showTip(event,'REACTOME_EUKARYOTIC_TRANSLATION_INITIATION<br>Consistency: 0.7311<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:100.0%"></span> 0.7311</td><td>0.002026</td></tr>
+<tr><td>REACTOME_INTERFERON_ALPHA_BETA_SIGNALING</td><td class="bar-cell" onmousemove="showTip(event,'REACTOME_INTERFERON_ALPHA_BETA_SIGNALING<br>Consistency: 0.7027<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:96.1%"></span> 0.7027</td><td>0.002026</td></tr>
+<tr><td>GRADE_COLON_AND_RECTAL_CANCER_UP</td><td class="bar-cell" onmousemove="showTip(event,'GRADE_COLON_AND_RECTAL_CANCER_UP<br>Consistency: 0.6808<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:93.1%"></span> 0.6808</td><td>0.002026</td></tr>
+<tr><td>SABATES_COLORECTAL_ADENOMA_DN</td><td class="bar-cell" onmousemove="showTip(event,'SABATES_COLORECTAL_ADENOMA_DN<br>Consistency: 0.6166<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:84.3%"></span> 0.6166</td><td>0.002026</td></tr>
+<tr><td>REACTOME_M_PHASE</td><td class="bar-cell" onmousemove="showTip(event,'REACTOME_M_PHASE<br>Consistency: 0.6115<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:83.6%"></span> 0.6115</td><td>0.002026</td></tr>
+<tr><td>BENPORATH_MYC_MAX_TARGETS</td><td class="bar-cell" onmousemove="showTip(event,'BENPORATH_MYC_MAX_TARGETS<br>Consistency: 0.5942<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:81.3%"></span> 0.5942</td><td>0.002026</td></tr>
+<tr><td>KRIGE_RESPONSE_TO_TOSEDOSTAT_6HR_DN</td><td class="bar-cell" onmousemove="showTip(event,'KRIGE_RESPONSE_TO_TOSEDOSTAT_6HR_DN<br>Consistency: 0.5931<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:81.1%"></span> 0.5931</td><td>0.002026</td></tr>
+<tr><td>ACEVEDO_LIVER_TUMOR_VS_NORMAL_ADJACENT_TISSUE_UP</td><td class="bar-cell" onmousemove="showTip(event,'ACEVEDO_LIVER_TUMOR_VS_NORMAL_ADJACENT_TISSUE_UP<br>Consistency: 0.5874<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:80.3%"></span> 0.5874</td><td>0.002026</td></tr>
+<tr><td>REACTOME_MITOCHONDRIAL_TRANSLATION</td><td class="bar-cell" onmousemove="showTip(event,'REACTOME_MITOCHONDRIAL_TRANSLATION<br>Consistency: 0.5739<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:78.5%"></span> 0.5739</td><td>0.002026</td></tr>
+<tr><td>PULVER_FOREY_PERTURB_ACCUMULATION_LG1</td><td class="bar-cell" onmousemove="showTip(event,'PULVER_FOREY_PERTURB_ACCUMULATION_LG1<br>Consistency: 0.5690<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:77.8%"></span> 0.5690</td><td>0.002026</td></tr>
+<tr><td>LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN</td><td class="bar-cell" onmousemove="showTip(event,'LIU_OVARIAN_CANCER_TUMORS_AND_XENOGRAFTS_XDGS_DN<br>Consistency: 0.5685<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:77.8%"></span> 0.5685</td><td>0.002026</td></tr>
+<tr><td>STARK_PREFRONTAL_CORTEX_22Q11_DELETION_DN</td><td class="bar-cell" onmousemove="showTip(event,'STARK_PREFRONTAL_CORTEX_22Q11_DELETION_DN<br>Consistency: 0.5673<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:77.6%"></span> 0.5673</td><td>0.002026</td></tr>
+<tr><td>IBRAHIM_NRF1_UP</td><td class="bar-cell" onmousemove="showTip(event,'IBRAHIM_NRF1_UP<br>Consistency: 0.5619<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:76.9%"></span> 0.5619</td><td>0.002026</td></tr>
+<tr><td>CREIGHTON_ENDOCRINE_THERAPY_RESISTANCE_3</td><td class="bar-cell" onmousemove="showTip(event,'CREIGHTON_ENDOCRINE_THERAPY_RESISTANCE_3<br>Consistency: 0.5618<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:76.8%"></span> 0.5618</td><td>0.002026</td></tr>
+<tr><td>ZHANG_BREAST_CANCER_PROGENITORS_UP</td><td class="bar-cell" onmousemove="showTip(event,'ZHANG_BREAST_CANCER_PROGENITORS_UP<br>Consistency: 0.5580<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:76.3%"></span> 0.5580</td><td>0.002026</td></tr>
+<tr><td>SPIELMAN_LYMPHOBLAST_EUROPEAN_VS_ASIAN_UP</td><td class="bar-cell" onmousemove="showTip(event,'SPIELMAN_LYMPHOBLAST_EUROPEAN_VS_ASIAN_UP<br>Consistency: 0.5527<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:75.6%"></span> 0.5527</td><td>0.002026</td></tr>
+<tr><td>REACTOME_PROCESSING_OF_CAPPED_INTRON_CONTAINING_PRE_MRNA</td><td class="bar-cell" onmousemove="showTip(event,'REACTOME_PROCESSING_OF_CAPPED_INTRON_CONTAINING_PRE_MRNA<br>Consistency: 0.5488<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:75.1%"></span> 0.5488</td><td>0.002026</td></tr>
+<tr><td>JIANG_MELANOMA_TRM1_CD8</td><td class="bar-cell" onmousemove="showTip(event,'JIANG_MELANOMA_TRM1_CD8<br>Consistency: 0.5474<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:74.9%"></span> 0.5474</td><td>0.002026</td></tr>
+<tr><td>HOUNKPE_HOUSEKEEPING_GENES</td><td class="bar-cell" onmousemove="showTip(event,'HOUNKPE_HOUSEKEEPING_GENES<br>Consistency: 0.5469<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:74.8%"></span> 0.5469</td><td>0.002026</td></tr>
+<tr><td>LOPEZ_MBD_TARGETS</td><td class="bar-cell" onmousemove="showTip(event,'LOPEZ_MBD_TARGETS<br>Consistency: 0.5411<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:74.0%"></span> 0.5411</td><td>0.002026</td></tr>
+<tr><td>JIANG_MELANOMA_TRM3_CD8</td><td class="bar-cell" onmousemove="showTip(event,'JIANG_MELANOMA_TRM3_CD8<br>Consistency: 0.5270<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:72.1%"></span> 0.5270</td><td>0.002026</td></tr>
+<tr><td>REACTOME_GPCR_LIGAND_BINDING</td><td class="bar-cell" onmousemove="showTip(event,'REACTOME_GPCR_LIGAND_BINDING<br>Consistency: 0.4954<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:67.8%"></span> 0.4954</td><td>0.002026</td></tr>
+<tr><td>MIKKELSEN_MCV6_HCP_WITH_H3K27ME3</td><td class="bar-cell" onmousemove="showTip(event,'MIKKELSEN_MCV6_HCP_WITH_H3K27ME3<br>Consistency: 0.4826<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:66.0%"></span> 0.4826</td><td>0.002026</td></tr>
+<tr><td>GRAESSMANN_APOPTOSIS_BY_DOXORUBICIN_DN</td><td class="bar-cell" onmousemove="showTip(event,'GRAESSMANN_APOPTOSIS_BY_DOXORUBICIN_DN<br>Consistency: 0.4682<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:64.0%"></span> 0.4682</td><td>0.002026</td></tr>
+<tr><td>SEIDEN_ONCOGENESIS_BY_MET</td><td class="bar-cell" onmousemove="showTip(event,'SEIDEN_ONCOGENESIS_BY_MET<br>Consistency: 0.4478<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:61.2%"></span> 0.4478</td><td>0.002026</td></tr>
+<tr><td>FLECHNER_BIOPSY_KIDNEY_TRANSPLANT_REJECTED_VS_OK_DN</td><td class="bar-cell" onmousemove="showTip(event,'FLECHNER_BIOPSY_KIDNEY_TRANSPLANT_REJECTED_VS_OK_DN<br>Consistency: 0.4295<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:58.7%"></span> 0.4295</td><td>0.002026</td></tr>
+<tr><td>KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3</td><td class="bar-cell" onmousemove="showTip(event,'KOINUMA_TARGETS_OF_SMAD2_OR_SMAD3<br>Consistency: 0.4045<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:55.3%"></span> 0.4045</td><td>0.002026</td></tr>
+<tr><td>CHARAFE_BREAST_CANCER_LUMINAL_VS_MESENCHYMAL_UP</td><td class="bar-cell" onmousemove="showTip(event,'CHARAFE_BREAST_CANCER_LUMINAL_VS_MESENCHYMAL_UP<br>Consistency: 0.3834<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:52.4%"></span> 0.3834</td><td>0.002026</td></tr>
+<tr><td>WATANABE_RECTAL_CANCER_RADIOTHERAPY_RESPONSIVE_UP</td><td class="bar-cell" onmousemove="showTip(event,'WATANABE_RECTAL_CANCER_RADIOTHERAPY_RESPONSIVE_UP<br>Consistency: 0.3804<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:52.0%"></span> 0.3804</td><td>0.002026</td></tr>
+<tr><td>PULVER_FOREY_CELLCYCLE_PEAKING_G2_M</td><td class="bar-cell" onmousemove="showTip(event,'PULVER_FOREY_CELLCYCLE_PEAKING_G2_M<br>Consistency: 0.3687<br>p-value: 0.000999<br>FDR: 0.002026')" onmouseout="hideTip()"><span class="bar bar-sig" style="width:50.4%"></span> 0.3687</td><td>0.002026</td></tr>
+</table>
+<div class="legend">
+<span class="legend-box" style="background:#2166ac"></span> FDR &lt; 0.05 &nbsp;
+<span class="legend-box" style="background:#d6604d"></span> FDR &ge; 0.05
+</div>
+</body></html>
