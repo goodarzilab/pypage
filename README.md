@@ -5,55 +5,6 @@
 [![Tests](https://github.com/goodarzilab/pyPAGE/actions/workflows/run_tests.yml/badge.svg)](https://github.com/goodarzilab/pyPAGE/actions/workflows/run_tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Examples
-
-Use these canonical examples with the bundled `example_data/` outputs.
-
-```bash
-pypage -e example_data/test_DESeq_logFC.txt \
-    --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt \
-    --type continuous --n-bins 9 \
-    --cols GENE,log2FoldChange \
-    --seed 42 \
-    --outdir example_data/test_DESeq_logFC_cont_PAGE
-```
-
-```bash
-pypage -e example_data/test_DESeq_logFC.txt \
-    --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt \
-    --type discrete \
-    --cols GENE,log2FoldChange_bin9 \
-    --seed 42 \
-    --outdir example_data/test_DESeq_logFC_disc_PAGE
-```
-
-```bash
-pypage-sc --adata example_data/CRC.h5ad \
-    --gene-column gene \
-    --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt \
-    --groupby PhenoGraph_clusters --n-jobs 0 --fast-mode
-```
-
-### Expected Outputs (Demo Artifacts)
-
-Bulk continuous (`example_data/test_DESeq_logFC_cont_PAGE/`):
-- [Heatmap PDF](example_data/test_DESeq_logFC_cont_PAGE/plots/heatmap.pdf)
-- [Heatmap HTML](example_data/test_DESeq_logFC_cont_PAGE/heatmap.html)
-- [Results matrix TSV](example_data/test_DESeq_logFC_cont_PAGE/tables/results.matrix.tsv)
-- [Results TSV](example_data/test_DESeq_logFC_cont_PAGE/tables/results.tsv)
-
-Bulk discrete (`example_data/test_DESeq_logFC_disc_PAGE/`):
-- [Heatmap PDF](example_data/test_DESeq_logFC_disc_PAGE/plots/heatmap.pdf)
-- [Heatmap HTML](example_data/test_DESeq_logFC_disc_PAGE/heatmap.html)
-- [Results matrix TSV](example_data/test_DESeq_logFC_disc_PAGE/tables/results.matrix.tsv)
-- [Results TSV](example_data/test_DESeq_logFC_disc_PAGE/tables/results.tsv)
-
-Single-cell (`example_data/CRC_scPAGE/`):
-- [Interactive SC report](example_data/CRC_scPAGE/sc_report.html)
-- [Consistency ranking PDF](example_data/CRC_scPAGE/plots/ranking.pdf)
-- [Example UMAP pathway PDF](example_data/CRC_scPAGE/plots/umap_plots/REACTOME_M_PHASE.pdf)
-- [Example group-enrichment PDF](example_data/CRC_scPAGE/plots/group_enrichment/sc_group_enrichment_REACTOME_M_PHASE.pdf)
-- [Group-enrichment stats TSV](example_data/CRC_scPAGE/plots/group_enrichment/sc_group_enrichment_stats.tsv)
 `pyPAGE` is a Python implementation of the conditional-information PAGE framework for gene-set enrichment analysis.
 
 It is designed to infer differential activity of pathways and regulons while accounting for annotation and membership biases using information-theoretic methods.
@@ -133,6 +84,56 @@ heatmap.show()
 - `z-score` — z-score of observed CMI vs. permutation null distribution
 - `p-value` — empirical p-value from permutation test
 - `Regulation pattern` (`1` for up, `-1` for down)
+
+## Examples
+
+Use these canonical examples with the bundled `example_data/` outputs.
+
+```bash
+pypage -e example_data/test_DESeq_logFC.txt \
+    --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt \
+    --type continuous --n-bins 9 \
+    --cols GENE,log2FoldChange \
+    --seed 42 \
+    --outdir example_data/test_DESeq_logFC_cont_PAGE
+```
+
+```bash
+pypage -e example_data/test_DESeq_logFC.txt \
+    --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt \
+    --type discrete \
+    --cols GENE,log2FoldChange_bin9 \
+    --seed 42 \
+    --outdir example_data/test_DESeq_logFC_disc_PAGE
+```
+
+```bash
+pypage-sc --adata example_data/CRC.h5ad \
+    --gene-column gene \
+    --gmt example_data/c2.all.v2026.1.Hs.symbols.gmt \
+    --groupby PhenoGraph_clusters --n-jobs 0 --fast-mode
+```
+
+### Expected Outputs (Demo Artifacts)
+
+Bulk continuous (`example_data/test_DESeq_logFC_cont_PAGE/`):
+- [Heatmap PDF](example_data/test_DESeq_logFC_cont_PAGE/plots/heatmap.pdf)
+- [Heatmap HTML](example_data/test_DESeq_logFC_cont_PAGE/heatmap.html)
+- [Results matrix TSV](example_data/test_DESeq_logFC_cont_PAGE/tables/results.matrix.tsv)
+- [Results TSV](example_data/test_DESeq_logFC_cont_PAGE/tables/results.tsv)
+
+Bulk discrete (`example_data/test_DESeq_logFC_disc_PAGE/`):
+- [Heatmap PDF](example_data/test_DESeq_logFC_disc_PAGE/plots/heatmap.pdf)
+- [Heatmap HTML](example_data/test_DESeq_logFC_disc_PAGE/heatmap.html)
+- [Results matrix TSV](example_data/test_DESeq_logFC_disc_PAGE/tables/results.matrix.tsv)
+- [Results TSV](example_data/test_DESeq_logFC_disc_PAGE/tables/results.tsv)
+
+Single-cell (`example_data/CRC_scPAGE/`):
+- [Interactive SC report](example_data/CRC_scPAGE/sc_report.html)
+- [Consistency ranking PDF](example_data/CRC_scPAGE/plots/ranking.pdf)
+- [Example UMAP pathway PDF](example_data/CRC_scPAGE/plots/umap_plots/REACTOME_M_PHASE.pdf)
+- [Example group-enrichment PDF](example_data/CRC_scPAGE/plots/group_enrichment/sc_group_enrichment_REACTOME_M_PHASE.pdf)
+- [Group-enrichment stats TSV](example_data/CRC_scPAGE/plots/group_enrichment/sc_group_enrichment_stats.tsv)
 
 ## Tutorial: DESeq2 Log Fold-Change with Hallmark Gene Sets
 
