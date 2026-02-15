@@ -99,6 +99,31 @@ def _build_parser():
         help="Chunk size for permutation null generation (default: auto, memory-aware)",
     )
     parser.add_argument(
+        "--filter-redundant",
+        dest="filter_redundant",
+        action="store_true",
+        default=True,
+        help="Enable redundancy filtering via CMI/MI ratio (default: enabled)",
+    )
+    parser.add_argument(
+        "--no-filter-redundant",
+        dest="filter_redundant",
+        action="store_false",
+        help="Disable redundancy filtering",
+    )
+    parser.add_argument(
+        "--redundancy-ratio", type=float, default=5.0,
+        help="CMI/MI ratio threshold for redundancy filtering (default: 5.0)",
+    )
+    parser.add_argument(
+        "--redundancy-scope", choices=["fdr", "all"], default="fdr",
+        help="Apply redundancy filtering to FDR-significant pathways or all pathways (default: fdr)",
+    )
+    parser.add_argument(
+        "--redundancy-fdr", type=float, default=0.05,
+        help="FDR threshold used when --redundancy-scope=fdr (default: 0.05)",
+    )
+    parser.add_argument(
         "--n-jobs", type=int, default=1,
         help="Number of parallel threads (default: 1)",
     )
@@ -121,6 +146,10 @@ def _build_parser():
     parser.add_argument(
         "--scores", default=None,
         help="Save per-cell scores matrix as TSV (cells x pathways, with header)",
+    )
+    parser.add_argument(
+        "--killed", default=None,
+        help="Save redundancy log as TSV (default: outdir/results.killed.tsv)",
     )
 
     # -- Visualization options ------------------------------------------------
@@ -514,6 +543,8 @@ def main(argv=None):
         args.ranking_html = os.path.join(outdir, "ranking.html")
     if args.report is None and not args.no_report:
         args.report = os.path.join(outdir, "report.html")
+    if args.killed is None:
+        args.killed = os.path.join(outdir, "results.killed.tsv")
     save_adata_path = None
     if not args.no_save_adata and args.adata is not None:
         save_adata_path = os.path.join(outdir, "adata.h5ad")
@@ -580,6 +611,10 @@ def main(argv=None):
         bin_axis=args.bin_axis,
         permutation_chunk_size=args.perm_chunk_size,
         n_jobs=args.n_jobs,
+        filter_redundant=args.filter_redundant,
+        redundancy_ratio=args.redundancy_ratio,
+        redundancy_scope=args.redundancy_scope,
+        redundancy_fdr=args.redundancy_fdr,
     )
     _status(
         f"SingleCellPAGE initialized: {sc.n_cells} cells, {sc.n_pathways} pathways, "
@@ -602,6 +637,9 @@ def main(argv=None):
     # -- Write results --------------------------------------------------------
     results.to_csv(args.output, sep="\t", index=False)
     print(f"Results saved to {args.output}", file=sys.stderr)
+    killed_df = sc.get_redundancy_log()
+    killed_df.to_csv(args.killed, sep="\t", index=False)
+    print(f"Redundancy log saved to {args.killed}", file=sys.stderr)
 
     # -- Write per-cell scores ------------------------------------------------
     if args.scores is not None:
@@ -619,8 +657,11 @@ def main(argv=None):
             pw_names_out = pathway_names
         else:
             pw_names_out = list(sc.pathway_names)
-        for i, pw_name in enumerate(pw_names_out):
-            adata.obs[f"scPAGE_{pw_name}"] = sc.scores[:, i]
+        score_cols = [f"scPAGE_{pw_name}" for pw_name in pw_names_out]
+        score_obs = pd.DataFrame(sc.scores, index=adata.obs.index, columns=score_cols)
+        # Batch-join once to avoid pandas DataFrame fragmentation warnings.
+        adata.obs = adata.obs.drop(columns=score_cols, errors="ignore")
+        adata.obs = pd.concat([adata.obs, score_obs], axis=1)
 
     # -- Save annotated adata -------------------------------------------------
     if save_adata_path is not None and adata is not None:

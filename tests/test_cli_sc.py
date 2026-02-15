@@ -12,6 +12,24 @@ def test_sc_parser_accepts_groupby():
     assert args.groupby == "PhenoGraph_clusters"
 
 
+def test_sc_parser_accepts_redundancy_flags():
+    parser = _build_parser()
+    args = parser.parse_args(
+        [
+            "--no-filter-redundant",
+            "--redundancy-ratio", "3.0",
+            "--redundancy-scope", "all",
+            "--redundancy-fdr", "0.1",
+            "--killed", "killed.tsv",
+        ]
+    )
+    assert args.filter_redundant is False
+    assert args.redundancy_ratio == 3.0
+    assert args.redundancy_scope == "all"
+    assert args.redundancy_fdr == 0.1
+    assert args.killed == "killed.tsv"
+
+
 def test_sc_groupby_requires_adata():
     with pytest.raises(SystemExit):
         main(

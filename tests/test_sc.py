@@ -144,6 +144,30 @@ class TestSingleCellPAGEInit:
                 permutation_chunk_size=0,
             )
 
+    def test_init_bad_redundancy_ratio(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        with pytest.raises(ValueError, match="redundancy_ratio must be"):
+            SingleCellPAGE(
+                expression=expression, genes=genes, genesets=gs,
+                redundancy_ratio=0,
+            )
+
+    def test_init_bad_redundancy_scope(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        with pytest.raises(ValueError, match="redundancy_scope must be"):
+            SingleCellPAGE(
+                expression=expression, genes=genes, genesets=gs,
+                redundancy_scope="bad",
+            )
+
+    def test_init_bad_redundancy_fdr(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        with pytest.raises(ValueError, match="redundancy_fdr must be"):
+            SingleCellPAGE(
+                expression=expression, genes=genes, genesets=gs,
+                redundancy_fdr=1.2,
+            )
+
     def test_init_1d_expression_raises(self, synthetic_data):
         _, genes, gs, _ = synthetic_data
         with pytest.raises(ValueError, match="2D"):
@@ -297,6 +321,53 @@ class TestSingleCellPAGERun:
             res_full.sort_values('pathway').reset_index(drop=True),
             res_chunked.sort_values('pathway').reset_index(drop=True),
         )
+
+    def test_redundancy_log_schema_without_run(self, synthetic_data):
+        expression, genes, gs, _ = synthetic_data
+        sc = SingleCellPAGE(expression=expression, genes=genes, genesets=gs)
+        log = sc.get_redundancy_log()
+        assert list(log.columns) == ['rejected_pathway', 'killed_by', 'min_ratio']
+        assert len(log) == 0
+
+    def test_redundancy_filtering_kills_duplicate_pathway(self):
+        rng = np.random.RandomState(0)
+        n_cells = 60
+        n_genes = 40
+        genes = np.array([f"g{i}" for i in range(n_genes)])
+        expression = rng.normal(size=(n_cells, n_genes))
+        expression[: n_cells // 2, :10] += 2.0
+        expression[n_cells // 2:, :10] -= 2.0
+
+        gs_genes = []
+        gs_pathways = []
+        for g in genes[:10]:
+            gs_genes.extend([g, g])
+            gs_pathways.extend(["dup_a", "dup_b"])
+        for g in genes[10:20]:
+            gs_genes.append(g)
+            gs_pathways.append("other")
+
+        gs = GeneSets(np.array(gs_genes), np.array(gs_pathways))
+        sc = SingleCellPAGE(
+            expression=expression,
+            genes=genes,
+            genesets=gs,
+            function='mi',
+            n_bins=4,
+            filter_redundant=True,
+            redundancy_scope='all',
+            redundancy_ratio=5.0,
+        )
+        np.random.seed(7)
+        results = sc.run(n_permutations=20)
+        killed = sc.get_redundancy_log()
+
+        assert len(killed) >= 1
+        killed_set = set(killed['rejected_pathway'].tolist())
+        assert ('dup_a' in killed_set) or ('dup_b' in killed_set)
+        assert len(results) < sc.n_pathways
+        assert hasattr(sc, 'full_results')
+        assert 'redundant' in sc.full_results.columns
 
 
 class TestRunNeighborhoods:

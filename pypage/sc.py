@@ -18,6 +18,7 @@ from .page import PAGE
 from .information import (
     mutual_information, conditional_mutual_information,
     batch_mutual_information_2d, batch_conditional_mutual_information_2d,
+    measure_redundancy,
 )
 from .spatial import geary_c, geary_c_batch, build_knn_graph
 from .utils import benjamini_hochberg
@@ -61,6 +62,18 @@ class SingleCellPAGE:
     n_jobs : int, optional
         Number of threads for Numba parallel execution. Default: 1.
         Set to 0 or None to use all available threads.
+    filter_redundant : bool, optional
+        Whether to apply redundancy filtering (CMI/MI ratio) after
+        permutation testing. Default: True.
+    redundancy_ratio : float, optional
+        CMI/MI ratio threshold. Candidate pathways with ratio <= this
+        threshold against an accepted pathway are marked redundant.
+        Default: 5.0.
+    redundancy_scope : str, optional
+        Which pathways to consider for redundancy filtering:
+        'fdr' (only FDR-significant pathways) or 'all'. Default: 'fdr'.
+    redundancy_fdr : float, optional
+        FDR threshold used when redundancy_scope='fdr'. Default: 0.05.
     """
 
     def __init__(
@@ -76,6 +89,10 @@ class SingleCellPAGE:
         bin_axis='cell',
         permutation_chunk_size=None,
         n_jobs=1,
+        filter_redundant=True,
+        redundancy_ratio=5.0,
+        redundancy_scope='fdr',
+        redundancy_fdr=0.05,
     ):
         if genesets is None:
             raise ValueError("genesets is required")
@@ -87,6 +104,18 @@ class SingleCellPAGE:
             raise ValueError(
                 f"permutation_chunk_size must be > 0 when provided, got {permutation_chunk_size!r}"
             )
+        if redundancy_ratio is not None and float(redundancy_ratio) <= 0:
+            raise ValueError(
+                f"redundancy_ratio must be > 0, got {redundancy_ratio!r}"
+            )
+        if redundancy_scope not in ('fdr', 'all'):
+            raise ValueError(
+                f"redundancy_scope must be 'fdr' or 'all', got {redundancy_scope!r}"
+            )
+        if not (0 <= float(redundancy_fdr) <= 1):
+            raise ValueError(
+                f"redundancy_fdr must be in [0, 1], got {redundancy_fdr!r}"
+            )
 
         self.genesets = genesets
         self.n_bins = n_bins
@@ -96,6 +125,10 @@ class SingleCellPAGE:
             None if permutation_chunk_size is None else int(permutation_chunk_size)
         )
         self.n_jobs = n_jobs
+        self.filter_redundant = bool(filter_redundant)
+        self.redundancy_ratio = float(redundancy_ratio)
+        self.redundancy_scope = redundancy_scope
+        self.redundancy_fdr = float(redundancy_fdr)
         self.embeddings = {}
 
         if adata is not None:
@@ -382,13 +415,15 @@ class SingleCellPAGE:
         self.consistency = self._compute_geary_c(self.scores)
         self.pvalues = np.full(len(pathway_indices), np.nan)
         self.fdr = np.full(len(pathway_indices), np.nan)
-
-        self.results = pd.DataFrame({
+        self._killed_log = []
+        self.full_results = pd.DataFrame({
             'pathway': [self.pathway_names[i] for i in pathway_indices],
             'consistency': self.consistency,
             'p-value': self.pvalues,
             'FDR': self.fdr,
+            'redundant': np.zeros(len(pathway_indices), dtype=bool),
         }).sort_values('consistency', ascending=False).reset_index(drop=True)
+        self.results = self.full_results.drop(columns=['redundant']).copy()
 
         return self.results
 
@@ -428,14 +463,109 @@ class SingleCellPAGE:
         pipeline_bar.set_postfix_str("permutation test ready")
         pipeline_bar.close()
 
-        self.results = pd.DataFrame({
+        redundant_mask = (
+            self._consolidate_pathways()
+            if self.filter_redundant
+            else np.zeros(self.n_pathways, dtype=bool)
+        )
+        if not self.filter_redundant:
+            self._killed_log = []
+
+        self.full_results = pd.DataFrame({
             'pathway': self.pathway_names,
             'consistency': self.consistency,
             'p-value': self.pvalues,
             'FDR': self.fdr,
+            'redundant': redundant_mask,
         }).sort_values('consistency', ascending=False).reset_index(drop=True)
+        if self.filter_redundant:
+            self.results = self.full_results[
+                ~self.full_results['redundant']
+            ].drop(columns=['redundant']).reset_index(drop=True)
+        else:
+            self.results = self.full_results.drop(
+                columns=['redundant']
+            ).reset_index(drop=True)
 
         return self.results
+
+    def _redundancy_candidates(self):
+        """Return boolean mask of pathways considered for redundancy checks."""
+        if self.redundancy_scope == 'all':
+            return np.ones(self.n_pathways, dtype=bool)
+        return np.isfinite(self.fdr) & (self.fdr <= self.redundancy_fdr)
+
+    def _redundancy_expression_bins(self):
+        """Build deterministic pseudo-bulk expression bins for redundancy."""
+        expr_subset = self.expression_matrix[:, self._expr_idxs]
+        mean_expr = np.asarray(expr_subset.mean(axis=0)).reshape(-1)
+        if mean_expr.size == 0:
+            return np.zeros(0, dtype=np.int32), 1
+        if self.n_bins <= 1:
+            return np.zeros(mean_expr.size, dtype=np.int32), 1
+
+        q = np.quantile(mean_expr, np.linspace(0, 1, self.n_bins + 1))
+        inner_edges = q[1:-1]
+        if inner_edges.size == 0:
+            return np.zeros(mean_expr.size, dtype=np.int32), 1
+        exp_bins = np.digitize(mean_expr, inner_edges, right=False).astype(np.int32)
+        return exp_bins, int(exp_bins.max()) + 1
+
+    def _consolidate_pathways(self):
+        """Consolidate redundant pathways and track rejection provenance."""
+        candidate_mask = self._redundancy_candidates()
+        redundant_mask = np.zeros(self.n_pathways, dtype=bool)
+        self._killed_log = []
+
+        if candidate_mask.sum() <= 1:
+            return redundant_mask
+
+        exp_bins, x_bins = self._redundancy_expression_bins()
+        y_bins = int(self.ont_bool.max()) + 1
+        ont_i32 = self.ont_bool.astype(np.int32)
+        accepted = []
+
+        for idx in np.argsort(self.consistency)[::-1]:
+            idx = int(idx)
+            if not candidate_mask[idx]:
+                continue
+            if len(accepted) == 0:
+                accepted.append(idx)
+                continue
+
+            all_ri = np.zeros(len(accepted), dtype=np.float64)
+            for i, accepted_idx in enumerate(accepted):
+                all_ri[i] = measure_redundancy(
+                    exp_bins,
+                    ont_i32[idx],
+                    ont_i32[accepted_idx],
+                    x_bins,
+                    y_bins,
+                    y_bins,
+                )
+
+            if np.all(all_ri > self.redundancy_ratio):
+                accepted.append(idx)
+            else:
+                redundant_mask[idx] = True
+                min_i = int(np.argmin(all_ri))
+                killer_idx = accepted[min_i]
+                self._killed_log.append((
+                    self.pathway_names[idx],
+                    self.pathway_names[killer_idx],
+                    float(all_ri[min_i]),
+                ))
+
+        return redundant_mask
+
+    def get_redundancy_log(self) -> pd.DataFrame:
+        """Return rejected pathways with their killer pathway and min ratio."""
+        if not hasattr(self, '_killed_log'):
+            return pd.DataFrame(columns=['rejected_pathway', 'killed_by', 'min_ratio'])
+        return pd.DataFrame(
+            self._killed_log,
+            columns=['rejected_pathway', 'killed_by', 'min_ratio'],
+        )
 
     def run_neighborhoods(self, labels=None, n_pools=None):
         """Run standard PAGE on aggregated neighborhoods.
@@ -624,7 +754,9 @@ class SingleCellPAGE:
             f"  n_pathways={self.n_pathways},\n"
             f"  n_neighbors={self.n_neighbors},\n"
             f"  bin_axis='{self.bin_axis}',\n"
-            f"  function='{self.function}'\n"
+            f"  function='{self.function}',\n"
+            f"  filter_redundant={self.filter_redundant},\n"
+            f"  redundancy_scope='{self.redundancy_scope}'\n"
             f")"
         )
 
